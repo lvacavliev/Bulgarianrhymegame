@@ -126,6 +126,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: rgba(255,255,255,.06); color: var(--text); font: inherit; font-weight: 700;
 }
 .tempo-box .full { grid-column: 1 / -1; }
+.tempo-box .tap-big { min-height: 64px; font-size: 16px; touch-action: manipulation; user-select: none; }
 .tempo-box p { margin: 0; font-size: 12px; color: var(--muted); }
 .btn-ghost {
   border: 1px solid var(--panel-line); background: var(--panel); border-radius: 12px;

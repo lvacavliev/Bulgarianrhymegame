@@ -67,13 +67,17 @@ game.js `endGame()`; keep the element ids in index.html):**
    section 14 and add a session log entry.
 
 **Beat drop (added after M5, section 8A.6):** for SoundCloud beats, bar 1 of the rapping
-starts on the beat drop found in the track's public waveform data (`js/drop.js`); the
-2-bar count-in runs just before it. Tracks without a BPM get an estimated one.
+starts on the beat drop; the 2-bar count-in runs just before it. **The exact source is the
+ear:** the tempo box has "Тапни дропа и ритъма" (tap the drop, then every beat; a line fit
+gives the drop to ~10–40 ms and the BPM). Drops checked by ear go into `js/sc-tracks.js`
+(`dropMs`) for every player. The waveform guess (`js/drop.js`) is only the fallback: it was
+wrong for BLIGHT (guess 2.6 s, real drop 0:10, intro as loud as the beat). **TODO for the
+user:** tap the drop of each of the 21 tracks once, press "Копирай моите настройки" and give
+the JSON to the next session to bake into sc-tracks.js.
 
-**Open items carried forward:** the automatic drops/BPMs are not checked by ear (Impulse's
-estimate is known wrong: 130 vs the reference 104; Expectations and BLIGHT have no clear
-drop, detected at about 2 s); the app lists only the first 11 SoundCloud tracks, while the
-profile now has 21 (`getSounds()` returns more later; `SCW.load` stops polling early); the
+**Open items carried forward:** drops of 20 tracks are only waveform guesses (BLIGHT is set
+by ear: 10.0 s; Expectations' guess of 2 s is doubtful); BPMs are reference hints or
+estimates, not checked by ear; the
 synth beats are not judged by ear; the word lists are small (11–23 families each, M9 target
 40+). Hosting: the user has a Vercel deployment linked to the GitHub repo.
 
@@ -885,6 +889,24 @@ the whole track (50–130 ms each; CORS is open). That envelope is the only inpu
   fields the user changed; `SCW.clearTempo(slug)`.
 - **Tempo box:** BPM, "Пусни от (сек)" (blank = auto), "Дроп (сек)", tap tempo, a line with the
   automatic values, and "Върни автоматичните" (clears the user's values).
+- **Correction (same day):** the user reported BLIGHT's drop is at 0:10; the guess was 2.6 s.
+  Its intro is as loud as the beat in the peak data, so no loudness rule can see that drop.
+  The waveform guess is now only a fallback. Precedence for the drop: user tap > table
+  `dropMs` (ear-checked, shared) > waveform guess. Ear tool in the tempo box:
+  - **"Тапни дропа и ритъма"** (big button, `pointerdown` for low latency, or the physical
+    **T** key on the menu): during the SC preview, the first tap = the drop, then every beat.
+    Positions come from `SCW.position()`. `RB.beats.fitTaps(positions, knownBpm)` numbers the
+    taps by beat (single-beat intervals; a known BPM is used for numbering when it agrees
+    within 15%), fits pos = drop + i × beat by least squares (4 passes), keeps the known BPM
+    when the taps agree within 1 BPM, and returns `ok: false` (message "Тапите са неравни")
+    when the RMS residual is ≥ 10% of a beat. Simulated: 18,000 runs, ±30–50 ms jitter, 15%
+    missed beats → drop error median 5–12 ms, p99 ≤ 42 ms, **no accepted result > 60 ms off**.
+  - **"▶ Чуй дропа"** plays from 4 s before the drop (preview `startPreview(fromMs)`).
+  - **"Копирай моите настройки"** copies the user's values (`rb_scTempo` + titles) as JSON.
+  - `SCW.load` now polls `getSounds()` again (6 × 2.5 s) and appends new tracks (`tracks`
+    event): all **21** tracks are listed and analysed.
+  - Reference BPMs added to the table: behind-the-mask 86, florentine 89, the-frogg 82,
+    impulse 104; `blight: {dropMs: 10000}`.
 - Verified 2026-11-24: all 11 listed tracks analysed (no "Настрой темпо" badge left); in a real
   game on Moments Like This (drop 20.675 s, 90 BPM) playback started at 10.0 s, `time()` = 0 at
   15.34 s, so bar 1 = 20.675 s; manual drop override and reset work; synth games unchanged; no

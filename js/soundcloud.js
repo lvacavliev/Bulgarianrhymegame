@@ -31,6 +31,17 @@
     emit(evt, data) { for (const fn of (listeners[evt] || []).slice()) fn(data); },
   };
 
+  const toTracks = (list) => list.map((s, index) => s && s.title ? {
+    index,
+    id: s.id,
+    slug: slugOf(s.permalink_url),
+    title: s.title,
+    url: s.permalink_url,
+    artwork: art(s.artwork_url || (s.user && s.user.avatar_url)),
+    durationMs: s.duration || 0,
+    genre: s.genre || '',
+    waveformUrl: s.waveform_url || null,
+  } : null).filter(Boolean);
   const slugOf = (url) => (url || '').replace(/\/+$/, '').split('/').pop();
   const art = (url) => (url ? url.replace('-large.', '-t200x200.') : null);
 
@@ -85,20 +96,23 @@
           const named = list.filter((s) => s && s.title);
           if ((named.length < list.length || !list.length) && ++tries < 12) return setTimeout(poll, 700);
           clearTimeout(timeout);
-          S.tracks = list.map((s, index) => s && s.title ? {
-            index,
-            id: s.id,
-            slug: slugOf(s.permalink_url),
-            title: s.title,
-            url: s.permalink_url,
-            artwork: art(s.artwork_url || (s.user && s.user.avatar_url)),
-            durationMs: s.duration || 0,
-            genre: s.genre || '',
-            waveformUrl: s.waveform_url || null,
-          } : null).filter(Boolean);
+          S.tracks = toTracks(list);
           S.state = 'ready'; S.emit('state', S.state);
           resolve(S.tracks);
           S.analyzeAll();
+          // the widget pages in more of the profile later (11 at first, 21 a bit later)
+          let more = 0;
+          const again = () => w.getSounds((l2) => {
+            const t2 = toTracks(l2);
+            if (t2.length > S.tracks.length) {
+              const known = new Set(S.tracks.map((t) => t.slug));
+              for (const t of t2) if (!known.has(t.slug)) S.tracks.push(t);
+              S.emit('tracks', S.tracks);
+              S.analyzeAll();
+            }
+            if (++more < 6) setTimeout(again, 2500);
+          });
+          setTimeout(again, 2500);
         });
         poll();
       });
@@ -174,8 +188,8 @@
   S.analyzeAll = function () {
     if (analyzing) return analyzing;
     analyzing = (async () => {
-      for (const t of S.tracks) {
-        try { await S.analyze(t); } catch (e) { /* this track stays manual */ }
+      for (let i = 0; i < S.tracks.length; i++) { // the list can grow while this runs
+        try { await S.analyze(S.tracks[i]); } catch (e) { /* this track stays manual */ }
       }
       analyzing = null;
     })();
@@ -199,7 +213,8 @@
     let bpm = null, bpmSrc = null;
     if (u.bpm) { bpm = u.bpm; bpmSrc = 'user'; } else if (base && base.bpm) { bpm = base.bpm; bpmSrc = 'table'; } else if (auto && auto.bpm) { bpm = auto.bpm; bpmSrc = 'auto'; }
     let dropMs = null, dropSrc = null;
-    if (uDrop != null) { dropMs = uDrop; dropSrc = 'user'; } else if (auto) { dropMs = auto.dropMs; dropSrc = 'auto'; } else if (base && base.offsetMs) { dropMs = base.offsetMs; dropSrc = 'table'; }
+    // a drop checked by ear (user, then the shared table) always beats the waveform guess
+    if (uDrop != null) { dropMs = uDrop; dropSrc = 'user'; } else if (base && base.dropMs != null) { dropMs = base.dropMs; dropSrc = 'table'; } else if (auto) { dropMs = auto.dropMs; dropSrc = 'auto'; }
     if (!bpm && dropMs == null && uStart == null) return null;
     return { bpm, bpmSrc, dropMs, dropSrc, startMs: uStart, verified: !!(base && base.verified), user: !!user, auto };
   };

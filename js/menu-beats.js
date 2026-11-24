@@ -133,8 +133,9 @@
     if (document.activeElement !== $('#offsetInput')) $('#offsetInput').value = t.dropMs != null ? (t.dropMs / 1000).toFixed(2) : '';
     const a = t.auto;
     $('#tempoAuto').textContent = a
-      ? `Автоматично от вълната на песента: дроп на ${(a.dropMs / 1000).toFixed(2)} с, ~${Math.round(a.bpm * 10) / 10} BPM.`
-        + (t.dropSrc === 'user' || t.bpmSrc === 'user' || t.startMs != null ? ' Сега ползваш твои стойности.' : '')
+      ? `Предположение от вълната: дроп ~${(a.dropMs / 1000).toFixed(2)} с, ~${Math.round(a.bpm * 10) / 10} BPM. Може да греши: провери с „Чуй дропа“.`
+        + (t.dropSrc === 'user' || t.bpmSrc === 'user' || t.startMs != null ? ' Сега ползваш твои стойности.'
+          : t.dropSrc === 'table' ? ' Дропът е проверен на ухо.' : '')
       : (SCW.state === 'ready' ? 'Анализирам вълната на песента…' : '');
     $('#tempoAutoBtn').classList.toggle('hidden', !t.user);
   }
@@ -149,7 +150,8 @@
     $('#nowPos').textContent = '0:00';
   }
 
-  async function startPreview() {
+  // fromMs (SoundCloud only): play from this song position instead of the start
+  async function startPreview(fromMs) {
     const c = current();
     stopPreview();
     if (c.src === 'synth') {
@@ -159,7 +161,8 @@
       state.preview = eng;
     } else if (c.src === 'sc' && c.track) {
       // preview plays the track from its start point; the tempo is not needed to listen
-      const eng = new window.SCBeat(c.track, c.tempo || { bpm: null, startMs: null, dropMs: null }, 0);
+      const base = c.tempo || { bpm: null, startMs: null, dropMs: null };
+      const eng = new window.SCBeat(c.track, fromMs != null ? Object.assign({}, base, { startMs: fromMs }) : base, 0);
       state.preview = eng;
       $('#previewBtn').textContent = '…';
       eng.onExternalPause = () => { if (state.preview === eng) stopPreview(); };
@@ -243,30 +246,108 @@
   });
   // the automatic analysis finishes track by track after the catalogue loads
   let anaTimer = 0;
+  SCW.on('tracks', () => { if (state.src === 'sc') renderList(); });
   SCW.on('analysis', () => {
     clearTimeout(anaTimer);
     anaTimer = setTimeout(() => { if (state.src === 'sc') renderList(); renderNow(); }, 150);
   });
 
+  // ---------- tap along: the first tap marks the drop, the next taps the beats ----------
+  // The song position of every tap comes from the SoundCloud clock, so the result does not
+  // depend on when the preview started. A line fit over all taps (pos = drop + i × beat)
+  // gives the drop and the BPM; missed beats are fine (each tap is rounded to its beat).
+  // positions: song ms of each tap (first = drop). known: a BPM from the table or the
+  // waveform estimate, which is more precise than a few taps; it is kept when the taps agree
+  // within 1 BPM, and then only the drop is fitted.
+  function fitTaps(positions, known) {
+    const iv = [];
+    for (let i = 1; i < positions.length; i++) iv.push(positions[i] - positions[i - 1]);
+    // beat length from the median interval (a missed beat gives one long interval)
+    const sorted = iv.slice().sort((x, y) => x - y);
+    let beat = sorted[sorted.length >> 1];
+    // a missed beat gives a double interval: estimate from the single-beat intervals only
+    const single = sorted.filter((x) => x < 1.5 * sorted[0]);
+    if (single.length >= 2) beat = single[single.length >> 1];
+    // a known BPM numbers the taps without ambiguity (when the taps roughly agree with it)
+    if (known && Math.abs(beat - 60000 / known) < 0.15 * (60000 / known)) beat = 60000 / known;
+    const n = positions.length;
+    let idx = [];
+    // number every tap by its beat, fit the line, renumber with the better beat; repeat
+    for (let pass = 0; pass < 4; pass++) {
+      const p0 = positions[0];
+      idx = positions.map((p) => Math.round((p - p0) / beat));
+      const mi = idx.reduce((x, y) => x + y, 0) / n, mp = positions.reduce((x, y) => x + y, 0) / n;
+      let sxy = 0, sxx = 0;
+      positions.forEach((p, k) => { sxy += (idx[k] - mi) * (p - mp); sxx += (idx[k] - mi) ** 2; });
+      if (sxx) beat = sxy / sxx;
+    }
+    let bpm = 60000 / beat, keptKnown = false;
+    if (known && Math.abs(bpm - known) < 1) { bpm = known; beat = 60000 / known; keptKnown = true; }
+    // least squares intercept = song position of beat 0 = the drop
+    const drop = positions.reduce((x, p, k) => x + (p - idx[k] * beat), 0) / n;
+    // uneven taps (or too many skipped beats) → no result rather than a wrong one
+    const rms = Math.sqrt(positions.reduce((x, p, k) => x + (p - drop - idx[k] * beat) ** 2, 0) / n);
+    const ok = rms < 0.1 * beat && idx[idx.length - 1] >= 3;
+    return { bpm, dropMs: Math.max(0, Math.round(drop)), keptKnown, ok, rmsMs: rms };
+  }
+
   let taps = [];
-  $('#tapBtn').addEventListener('click', () => {
-    const now = performance.now();
-    if (taps.length && now - taps[taps.length - 1] > 2000) taps = [];
-    taps.push(now);
-    if (taps.length > 9) taps.shift();
+  function tap() {
+    const c = current();
     const btn = $('#tapBtn');
     btn.classList.add('flash');
     setTimeout(() => btn.classList.remove('flash'), 90);
-    if (taps.length >= 4) {
-      const iv = [];
-      for (let i = 1; i < taps.length; i++) iv.push(taps[i] - taps[i - 1]);
-      const bpm = Math.round((60000 / (iv.reduce((a, b) => a + b, 0) / iv.length)) * 2) / 2;
-      $('#bpmInput').value = bpm;
-      btn.textContent = `Тапни темпото · ${bpm} BPM (${taps.length})`;
-      saveTempoFromInputs();
-    } else {
-      btn.textContent = `Тапни темпото · ${taps.length}…`;
+    if (c.src !== 'sc' || !c.track) return;
+    if (!state.preview || !state.preview.isSC || !SCW.playing) {
+      toast('Пусни бийта с ▶ и тапни точно на дропа, после на всеки удар.');
+      return;
     }
+    const pos = SCW.position(), now = performance.now();
+    if (taps.length && now - taps[taps.length - 1].perf > 2000) taps = [];
+    taps.push({ pos, perf: now });
+    if (taps.length > 64) taps.shift();
+    if (taps.length < 4) { btn.textContent = `Тапни дропа и ритъма · ${taps.length}…`; return; }
+    const known = (c.tempo && c.tempo.bpmSrc !== 'user' && c.tempo.bpm) || null;
+    const { bpm, dropMs, keptKnown, ok } = fitTaps(taps.map((t) => t.pos), known);
+    const n = taps.length;
+    if (!ok) { btn.textContent = `Тапите са неравни (${n}): тапни пак, без да пропускаш удари`; return; }
+    SCW.saveTempo(c.track.slug, {
+      bpm: keptKnown ? null : Math.round(bpm * 100) / 100,
+      startMs: c.tempo && c.tempo.startMs != null ? c.tempo.startMs : null,
+      dropMs,
+    });
+    btn.textContent = `Дроп ${(dropMs / 1000).toFixed(2)} с · ${Math.round(bpm * 100) / 100} BPM (${n} тапа)`;
+    renderList();
+    renderNow();
+  }
+  // pointerdown, not click: a click fires on release, which is late for a tap
+  $('#tapBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); tap(); });
+  $('#tapBtn').addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); tap(); } });
+  document.addEventListener('keydown', (e) => {
+    if (window.RB.screen !== 'menu' || e.repeat || e.target.matches('input, select, textarea')) return;
+    if (e.code === 'KeyT') tap(); // physical T key = tap (works on Bulgarian layouts too)
+  });
+
+  // listen from 4 s before the drop, to check it by ear
+  $('#dropPlayBtn').addEventListener('click', () => {
+    const c = current();
+    if (c.src !== 'sc' || !c.track || !c.tempo) return;
+    taps = [];
+    startPreview(Math.max(0, (c.tempo.dropMs || 0) - 4000));
+  });
+
+  // copy the user's own values (to put them into js/sc-tracks.js for every player)
+  $('#tempoExportBtn').addEventListener('click', async () => {
+    let all = {};
+    try { all = JSON.parse(localStorage.getItem('rb_scTempo') || '{}'); } catch (e) { /* ignore */ }
+    const out = {};
+    for (const [slug, v] of Object.entries(all)) {
+      const t = SCW.tracks.find((x) => x.slug === slug);
+      out[slug] = Object.assign({ title: t ? t.title : slug }, v);
+    }
+    const text = JSON.stringify(out, null, 1);
+    try { await navigator.clipboard.writeText(text); toast(`Копирани настройки за ${Object.keys(out).length} бийта.`); }
+    catch (e) { window.prompt('Копирай това:', text); }
   });
 
   // ---------- sync slider ----------
@@ -288,12 +369,12 @@
     const li = e.target.closest('li[data-id]');
     if (li && e.key === 'Enter') select(state.src, li.dataset.id);
   });
-  $('#previewBtn').addEventListener('click', () => (state.preview ? stopPreview() : startPreview()));
+  $('#previewBtn').addEventListener('click', () => { taps = []; return state.preview ? stopPreview() : startPreview(); });
 
   // ---------- init ----------
   if (state.sel.src === 'synth' && !window.BEATS.find((b) => b.id === state.sel.id)) state.sel = { src: 'synth', id: window.BEATS[0].id };
   setTab(state.src === 'file' ? 'synth' : state.src);
   renderNow();
 
-  window.RB.beats = { current, makeEngine, stopPreview, get sync() { return sync; } };
+  window.RB.beats = { current, makeEngine, stopPreview, fitTaps, get sync() { return sync; } };
 })();
