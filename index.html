@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Римобой</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="stars" id="stars" aria-hidden="true"></div>
+
+<header class="topbar">
+  <button class="brand" id="brandBtn" aria-label="Към менюто"><span class="spark">✦</span><span class="b1">РИМО</span><span class="b2">БОЙ</span></button>
+  <div class="top-actions">
+    <button id="helpBtn" class="icon-btn" aria-label="Как се играе" title="Как се играе">?</button>
+    <button id="fsBtn" class="icon-btn" aria-label="Цял екран" title="Цял екран">⛶</button>
+  </div>
+</header>
+
+<!-- ================= MENU ================= -->
+<main id="menu" class="screen active">
+  <div class="menu-grid">
+    <section class="panel" id="beatPanel">
+      <h2 class="step">1 · Избери бийт</h2>
+      <div class="tabs" role="tablist">
+        <button class="tab" data-src="sc" role="tab">Bizzle Beats</button>
+        <button class="tab" data-src="synth" role="tab">Вградени</button>
+        <button class="tab" data-src="file" role="tab">Твой файл</button>
+      </div>
+      <input id="beatSearch" class="search" placeholder="Търси бийт…" aria-label="Търси бийт">
+      <ul id="beatList" class="beat-list"></ul>
+      <input type="file" id="fileInput" accept="audio/*" class="hidden">
+
+      <div id="tempoBox" class="tempo-box hidden">
+        <label>BPM<input id="bpmInput" type="number" min="50" max="220" step="0.5"></label>
+        <label>Старт (сек)<input id="startInput" type="number" min="0" step="0.05"></label>
+        <label>Първи удар (сек)<input id="offsetInput" type="number" min="0" step="0.01"></label>
+        <button id="tapBtn" class="btn-ghost full">Тапни темпото</button>
+        <p class="full">Тапвай в ритъм поне 8 пъти. „Първи удар“ = секундата на първия силен удар, от който да броим.</p>
+      </div>
+
+      <div class="now-card">
+        <div class="now-label">ТВОЯТ БИЙТ</div>
+        <div class="now-row">
+          <div class="cover" id="nowCover">🎧</div>
+          <div class="beat-info">
+            <div class="beat-title" id="nowTitle">Избери бийт</div>
+            <div class="beat-meta" id="nowMeta"></div>
+            <a class="sc-link hidden" id="nowLink" target="_blank" rel="noopener">Слушай в SoundCloud ↗</a>
+          </div>
+          <button class="round-btn" id="previewBtn" aria-label="Пусни / спри бийта">▶</button>
+        </div>
+        <div class="progress"><div id="nowProg"></div></div>
+        <div class="time-row"><span id="nowPos">0:00</span><span id="nowDur"></span></div>
+      </div>
+    </section>
+
+    <section class="panel" id="wordPanel">
+      <div class="panel-head"><h2 class="step">2 · Избери думи</h2><button id="resetBtn" class="link">Нулирай</button></div>
+      <div class="preview-wrap">
+        <button class="arrow" id="prevPrev" aria-label="Други думи">‹</button>
+        <div id="previewGrid" class="mini-grid"></div>
+        <button class="arrow" id="prevNext" aria-label="Други думи">›</button>
+      </div>
+      <div class="list-picker">
+        <button class="arrow" id="listPrev" aria-label="Предишен списък">‹</button>
+        <button class="list-card" id="listCard"><span id="listName"></span><small id="listMeta"></small></button>
+        <button class="arrow" id="listNext" aria-label="Следващ списък">›</button>
+      </div>
+      <div class="selects">
+        <label class="field"><span>Думи</span>
+          <select id="fillSel">
+            <option value="all">Всички думи</option>
+            <option value="first">Само първата</option>
+            <option value="last">Само последната</option>
+            <option value="none">Без думи</option>
+          </select></label>
+        <label class="field"><span>Дължина</span>
+          <select id="durSel">
+            <option value="8">8 бара</option>
+            <option value="16">16 бара</option>
+            <option value="32">32 бара</option>
+            <option value="64">64 бара</option>
+            <option value="full">Цялата песен</option>
+          </select></label>
+      </div>
+      <details id="adv">
+        <summary>Разширени настройки</summary>
+        <h3>Схема на римите</h3>
+        <div id="patternChips" class="chips"></div>
+        <h3>Скорост</h3>
+        <div id="speedChips" class="chips"></div>
+        <label class="toggle"><input type="checkbox" id="blankChk"><span>Празна игра<small>Без думи и без схема, само бийт и топка</small></span></label>
+        <h3>Синхрон на топката</h3>
+        <div class="sync-row"><input type="range" id="syncRange" min="-300" max="300" step="10"><b id="syncVal">0 ms</b></div>
+        <p class="hint">Ако топката изостава от бийта, мести наляво. Ако избързва, мести надясно.</p>
+      </details>
+    </section>
+  </div>
+  <p id="recNote" class="rec-note hidden">При SoundCloud бийт записът е само от микрофона.</p>
+  <div class="action-bar">
+    <button id="recBtn" class="rec-btn" aria-pressed="false" aria-label="Запис"><span class="dot"></span>ЗАПИС</button>
+    <button id="playBtn" class="btn-primary">▶ Играй</button>
+  </div>
+</main>
+
+<!-- ================= GAME ================= -->
+<main id="game" class="screen">
+  <div class="game-head">
+    <button id="exitBtn" class="icon-btn" aria-label="Изход">‹</button>
+    <div class="game-title"><div id="gHead1"></div><div id="gHead2"></div></div>
+    <span id="recBadge" class="rec-badge hidden">● REC</span>
+  </div>
+  <div class="stage">
+    <div id="viewport" class="viewport">
+      <div id="rows" class="rows"></div>
+      <div class="trail t3" id="tr3"></div><div class="trail t2" id="tr2"></div><div class="trail t1" id="tr1"></div>
+      <div class="ball" id="ball"></div>
+    </div>
+  </div>
+  <div class="watermark">✦ РИМОБОЙ</div>
+  <div class="player-bar">
+    <div class="now-row">
+      <div class="cover" id="gCover">🎧</div>
+      <div class="beat-info"><div class="beat-title" id="gTitle"></div><div class="beat-meta" id="gMeta"></div></div>
+      <button class="round-btn" id="pauseBtn" aria-label="Пауза">❚❚</button>
+    </div>
+    <div class="progress"><div id="gProg"></div></div>
+    <div class="time-row"><span id="gPos">0:00</span><span id="gDur">0:00</span></div>
+  </div>
+  <div id="pauseOv" class="overlay hidden">
+    <div class="dialog">
+      <h2>Пауза</h2>
+      <div class="dialog-actions">
+        <button class="btn-primary" id="resumeBtn">▶ Продължи</button>
+        <button class="btn-ghost" id="quitBtn">Към менюто</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ================= END ================= -->
+<main id="end" class="screen">
+  <h1 class="end-title">Браво!</h1>
+  <div class="end-grid">
+    <div class="stats-col">
+      <section class="panel stats">
+        <div class="now-label">СТАТИСТИКА</div>
+        <div class="stat"><b id="stDur">0:00</b><span>ВРЕМЕ</span></div>
+        <div class="stat"><b id="stBars">0</b><span>БАРОВЕ</span></div>
+        <div class="stat"><b id="stStreak">🔥 1</b><span>ПОРЕДНИ ДНИ</span></div>
+      </section>
+      <section class="panel hidden" id="recCard" style="margin-top:14px">
+        <div class="now-label">ТВОЯТ ЗАПИС</div>
+        <audio id="recAudio" controls></audio>
+        <div class="dialog-actions"><a class="btn-ghost" id="recDl" download>⬇ Свали записа</a></div>
+      </section>
+      <section class="panel" style="margin-top:14px">
+        <div class="now-label">БИЙТ</div>
+        <div class="now-row">
+          <div class="cover" id="eCover">🎧</div>
+          <div class="beat-info"><div class="beat-title" id="eTitle"></div><div class="beat-meta" id="eMeta"></div>
+            <a class="sc-link hidden" id="eLink" target="_blank" rel="noopener">Слушай в SoundCloud ↗</a></div>
+        </div>
+      </section>
+    </div>
+    <section class="panel">
+      <div class="now-label">ДУМИ</div>
+      <div id="recap" class="recap" style="margin-top:10px"></div>
+      <p class="hint">Докосни дума, за да видиш още рими.</p>
+    </section>
+  </div>
+  <div class="action-bar">
+    <button class="btn-ghost" id="menuBtn">Меню</button>
+    <button class="btn-primary" id="againBtn">Играй пак ›</button>
+  </div>
+</main>
+
+<!-- ================= MODALS ================= -->
+<div id="listModal" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Избери списък с думи">
+  <div class="dialog">
+    <button class="icon-btn x" data-close aria-label="Затвори">✕</button>
+    <h2>Избери списък с думи</h2>
+    <div id="listItems" class="list-items"></div>
+  </div>
+</div>
+
+<div id="dictModal" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Речник на римите">
+  <div class="dialog">
+    <button class="icon-btn x" data-close aria-label="Затвори">✕</button>
+    <div class="dict-sub" style="margin-top:0">Речник на римите</div>
+    <h2 id="dictWord"></h2>
+    <div class="dict-sub">Рими</div>
+    <div id="dictFam" class="dict-chips"></div>
+    <div id="dictMoreWrap"><div class="dict-sub">Още рими</div><div id="dictMore" class="dict-chips more"></div></div>
+  </div>
+</div>
+
+<div id="popup" class="overlay hidden">
+  <div class="dialog">
+    <div class="popup-emoji" id="popEmoji">🎉</div>
+    <div class="popup-big" id="popText">Страхотни барове!</div>
+    <div id="popSub" class="tut-sub"></div>
+    <button class="btn-primary" id="popBtn" style="width:220px">Продължи</button>
+  </div>
+</div>
+
+<div id="tutorial" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Как се играе">
+  <div class="dialog" style="padding-bottom:48px">
+    <div class="tut-dots" id="tutDots"><i></i><i></i><i></i></div>
+    <p class="tut-text" id="tutText"></p>
+    <p class="tut-sub" id="tutSub"></p>
+    <div class="tut-stage" id="tutStage"></div>
+    <button class="btn-primary" id="tutNext" style="width:240px;margin-top:10px"></button>
+    <button class="link skip-link" id="tutSkip">Пропусни</button>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden" role="status"></div>
+<canvas id="confetti" class="hidden"></canvas>
+
+<!-- hidden SoundCloud player (official embed) -->
+<iframe id="scw" title="SoundCloud" allow="autoplay" style="position:absolute;width:1px;height:1px;left:-9999px;top:0;border:0"></iframe>
+
+<!-- Enable each script when its milestone lands (BUILD.md section 3 has the order):
+<script src="config.js"></script>                              optional (path B API key), not used yet
+-->
+<script src="https://w.soundcloud.com/player/api.js"></script>
+<script src="js/words.js"></script>
+<script src="js/patterns.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/beats.js"></script>
+<script src="js/sc-tracks.js"></script>
+<script src="js/soundcloud.js"></script>
+<script src="js/chart.js"></script>
+<script src="js/app.js"></script>
+<script src="js/menu-beats.js"></script>
+<script src="js/menu-words.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

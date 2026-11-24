@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rimoboy SoundCloud check</title>
+<style>body{font:14px/1.5 monospace;background:#111;color:#eee;padding:16px}iframe{width:100%;height:300px;border:0}</style>
+</head>
+<body>
+<h1>SoundCloud widget check</h1>
+<p>Loads the bizzlebeats profile in the official widget and lists what getSounds() returns.</p>
+<iframe id="w" allow="autoplay"
+  src="https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/bizzlebeats&auto_play=false&visual=false"></iframe>
+<p><button id="playRoses" style="font-size:20px;padding:10px 20px">Play track 1 (user click)</button>
+<button id="pause" style="font-size:20px;padding:10px 20px">Pause</button></p>
+<pre id="drift"></pre>
+<pre id="out">waiting for READY…</pre>
+<script src="https://w.soundcloud.com/player/api.js"></script>
+<script>
+  const out = document.getElementById('out');
+  const log = (s) => { out.textContent += '\n' + s; };
+  const w = SC.Widget(document.getElementById('w'));
+  window.W = w;
+  w.bind(SC.Widget.Events.READY, () => {
+    log('READY');
+    let tries = 0;
+    const poll = () => w.getSounds((list) => {
+      const named = list.filter((s) => s && s.title).length;
+      log(`try ${tries}: ${list.length} sounds, ${named} with titles`);
+      if ((named < list.length || !list.length) && ++tries < 12) return setTimeout(poll, 800);
+      window.SOUNDS = list;
+      log(list.map((s, i) => `${i}. ${s.title} | ${s.permalink_url} | ${Math.round((s.duration || 0) / 1000)}s | bpm ${s.bpm} | ${s.genre}`).join('\n'));
+    });
+    poll();
+  });
+  w.bind(SC.Widget.Events.ERROR, (e) => log('ERROR ' + JSON.stringify(e)));
+
+  // Playback + clock check: after a real click, compare PLAY_PROGRESS positions with an
+  // extrapolated clock (anchor on the first progress event). Prints events and drift stats.
+  window.EV = [];
+  let anchor = null;
+  const drifts = [];
+  for (const k of ['PLAY', 'PAUSE', 'FINISH', 'SEEK']) {
+    w.bind(SC.Widget.Events[k], (e) => { EV.push(`${k} @${Math.round(performance.now())} pos ${Math.round((e && e.currentPosition) || 0)}`); if (k !== 'SEEK') anchor = null; });
+  }
+  w.bind(SC.Widget.Events.PLAY_PROGRESS, (e) => {
+    const now = performance.now();
+    if (!anchor) { anchor = { perf: now, pos: e.currentPosition }; return; }
+    drifts.push(e.currentPosition - (anchor.pos + (now - anchor.perf)));
+    const abs = drifts.map(Math.abs);
+    document.getElementById('drift').textContent =
+      `pos ${Math.round(e.currentPosition)} ms | samples ${drifts.length} | drift now ${Math.round(drifts[drifts.length - 1])} ms | max |drift| ${Math.round(Math.max(...abs))} ms | mean |drift| ${Math.round(abs.reduce((a, b) => a + b, 0) / abs.length)} ms\n` + EV.slice(-8).join('\n');
+  });
+  document.getElementById('playRoses').onclick = () => { w.skip(1); };
+  document.getElementById('pause').onclick = () => w.pause();
+</script>
+</body>
+</html>
