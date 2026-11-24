@@ -163,7 +163,7 @@
     return S.lastPos + Math.min(performance.now() - S.lastProgPerf, STALL_MS);
   };
 
-  // ---------- automatic analysis (js/drop.js) ----------
+  // ---------- fallback analysis for tracks missing from SC_TRACKS (js/drop.js) ----------
   // Results per slug {bpm, dropMs}, kept in localStorage `rb_scAuto` (only numbers, no audio).
   // Bump AUTO_V when the algorithm in drop.js changes, so old results are recomputed.
   const AUTO_V = 1;
@@ -189,6 +189,8 @@
     if (analyzing) return analyzing;
     analyzing = (async () => {
       for (let i = 0; i < S.tracks.length; i++) { // the list can grow while this runs
+        const base = (window.SC_TRACKS || {})[S.tracks[i].slug];
+        if (base && base.bpm && base.dropMs != null) continue; // measured from the audio: no guess needed
         try { await S.analyze(S.tracks[i]); } catch (e) { /* this track stays manual */ }
       }
       analyzing = null;
@@ -197,14 +199,19 @@
   };
 
   // Tempo for a track. Each field: the user's own value (localStorage rb_scTempo) > the
-  // SC_TRACKS table (bpm only) > the automatic analysis.
+  // SC_TRACKS table (measured offline from the audio, tools/analyze_sc.py) > the waveform guess.
   //   bpm, bpmSrc ('user'|'table'|'auto'|null)
-  //   dropMs  : bar 1 of the rapping (the beat drop), dropSrc ('user'|'auto'|null)
+  //   dropMs  : bar 1 of the rapping (the beat drop), dropSrc ('user'|'table'|'auto'|null)
+  //   endMs   : end of the full beat (table only; the outro is not rapped over)
   //   startMs : playback start chosen by the user, or null (= automatic, 2 bars before the count-in)
+  //   measured: the table has bpm + drop for this track; check: the analysis flagged it
   S.tempoFor = function (slug) {
     let user = null;
     try { user = (JSON.parse(localStorage.getItem('rb_scTempo') || '{}'))[slug] || null; } catch (e) { /* ignore */ }
     const base = (window.SC_TRACKS || {})[slug] || null;
+    // values saved before the measured table (no v: 2) were set against the old guesses:
+    // ignore them for measured tracks (they stay in storage; a new tap or edit replaces them)
+    if (user && user.v !== 2 && base && base.bpm && base.dropMs != null) user = null;
     const auto = S.auto[slug] || null;
     const u = user || {};
     // older saves used offsetMs for "first downbeat"; it means the same as dropMs here
@@ -213,16 +220,20 @@
     let bpm = null, bpmSrc = null;
     if (u.bpm) { bpm = u.bpm; bpmSrc = 'user'; } else if (base && base.bpm) { bpm = base.bpm; bpmSrc = 'table'; } else if (auto && auto.bpm) { bpm = auto.bpm; bpmSrc = 'auto'; }
     let dropMs = null, dropSrc = null;
-    // a drop checked by ear (user, then the shared table) always beats the waveform guess
+    // the user's tap > the measured table (offline audio analysis) > the waveform guess
     if (uDrop != null) { dropMs = uDrop; dropSrc = 'user'; } else if (base && base.dropMs != null) { dropMs = base.dropMs; dropSrc = 'table'; } else if (auto) { dropMs = auto.dropMs; dropSrc = 'auto'; }
     if (!bpm && dropMs == null && uStart == null) return null;
-    return { bpm, bpmSrc, dropMs, dropSrc, startMs: uStart, verified: !!(base && base.verified), user: !!user, auto };
+    // end of the full beat: a time limit, so it also works with the user's own drop / BPM
+    // (the game rounds the rapping down to whole bars before it)
+    const endMs = base && base.endMs ? base.endMs : null;
+    return { bpm, bpmSrc, dropMs, dropSrc, endMs, startMs: uStart, measured: !!(base && base.bpm && base.dropMs != null),
+      check: !!(base && base.check), verified: !!(base && base.verified), user: !!user, auto, base };
   };
   // fields: bpm (null = not set by the user), startMs (null = auto), dropMs (null = auto)
   S.saveTempo = function (slug, tempo) {
     try {
       const all = JSON.parse(localStorage.getItem('rb_scTempo') || '{}');
-      const rec = { bpm: tempo.bpm || null, startMs: tempo.startMs != null ? tempo.startMs : null, dropMs: tempo.dropMs != null ? tempo.dropMs : null };
+      const rec = { v: 2, bpm: tempo.bpm || null, startMs: tempo.startMs != null ? tempo.startMs : null, dropMs: tempo.dropMs != null ? tempo.dropMs : null };
       if (!rec.bpm && rec.startMs == null && rec.dropMs == null) delete all[slug]; else all[slug] = rec;
       localStorage.setItem('rb_scTempo', JSON.stringify(all));
     } catch (e) { /* private mode: tempo lives for this session only */ }

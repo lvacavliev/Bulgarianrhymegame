@@ -66,18 +66,21 @@ game.js `endGame()`; keep the element ids in index.html):**
    chips navigate; "Играй пак" gives new words; 360 px; no console errors. Then tick M6 in
    section 14 and add a session log entry.
 
-**Beat drop (added after M5, section 8A.6):** for SoundCloud beats, bar 1 of the rapping
-starts on the beat drop; the 2-bar count-in runs just before it. **The exact source is the
-ear:** the tempo box has "Тапни дропа и ритъма" (tap the drop, then every beat; a line fit
-gives the drop to ~10–40 ms and the BPM). Drops checked by ear go into `js/sc-tracks.js`
-(`dropMs`) for every player. The waveform guess (`js/drop.js`) is only the fallback: it was
-wrong for BLIGHT (guess 2.6 s, real drop 0:10, intro as loud as the beat). **TODO for the
-user:** tap the drop of each of the 21 tracks once, press "Копирай моите настройки" and give
-the JSON to the next session to bake into sc-tracks.js.
+**Beat data for SoundCloud (reworked 2026-11-24, section 8A.7):** BPM, beat drop and end
+of every Bizzle Beats track are **measured offline from the audio** (`tools/analyze_sc.py`,
+librosa) and baked into `js/sc-tracks.js` (`bpm`, `dropMs`, `endMs`, `check`). This is how the
+reference game works too (hand-made `beatBpm` / `beatDropMs` / `beatEndMs` per beat). Bar 1
+of the rapping = `dropMs` (the downbeat where the drums come in); the 2-bar count-in runs
+just before it; "Цялата песен" stops at `endMs`. Precedence per field: the user's tap/inputs
+(`rb_scTempo`) > the measured table > the waveform guess (`js/drop.js`, now only for new
+uploads that are not in the table yet). **New track on the profile:** run the analyzer, then
+`node tools/bake-sc-tracks.js` (8A.7). Tracks with `check: true` (11 of 21) should be heard
+once with "▶ Чуй дропа"; the tap tool fixes them.
 
-**Open items carried forward:** drops of 20 tracks are only waveform guesses (BLIGHT is set
-by ear: 10.0 s; Expectations' guess of 2 s is doubtful); BPMs are reference hints or
-estimates, not checked by ear; the
+**Open items carried forward:** the measured beat data is not checked by ear (the agent
+cannot listen); listen first to the `check: true` tracks (2wenty, behind-the-mask, blight,
+butterflies, eclipse, florentine, restraint, round-the-bend, the-frogg, warming-up, your-eyes — see the
+comments in sc-tracks.js); the
 synth beats are not judged by ear; basic has 273 words (50 families), two 156 (32),
 the other 4 lists 400+ each; M9 still adds the new theme lists. Hosting: the user has a Vercel deployment linked to the GitHub repo.
 
@@ -102,7 +105,9 @@ only.
    **Римобой** (Rimoboy). It has its own look (section 6). **Main beat source (user decision,
    2026-11-23): the public SoundCloud account `https://soundcloud.com/bizzlebeats`**, streamed
    through SoundCloud's official embed/API (section 8A). We never download, cache or
-   re-host the audio. Fallbacks: beats synthesized by our own code (section 8) and a file
+   re-host the audio. (Exception, user decision 2026-11-24: the developer tool
+   `tools/analyze_sc.py` fetches each track once to measure BPM/drop/end and deletes the
+   audio right after; only numbers are kept. The app itself never downloads audio. 8A.7.) Fallbacks: beats synthesized by our own code (section 8) and a file
    the user loads.
 2. **All UI text is Bulgarian.** Code identifiers and comments are English.
 3. **Runs from one folder.** It opens from `index.html` by double-click (`file://`) in
@@ -295,7 +300,9 @@ rhyme game bulgarian/
 ├── js/menu-words.js  ← menu words panel, settings (rb_settings), Play/REC buttons; loads after menu-beats.js
 ├── serve.py          ← no-cache local server (start.bat and .claude/launch.json use it)
 ├── tests/            ← data-check.js (node), audio-check.html, sc-check.html (browser, via server)
-├── js/sc-tracks.js   ← window.SC_TRACKS: per-track BPM + downbeat offset (filled by hand)
+├── js/sc-tracks.js   ← window.SC_TRACKS: per-track bpm / dropMs / endMs (GENERATED, section 8A.7)
+├── js/drop.js        ← waveform guess of BPM + drop, only for tracks missing from SC_TRACKS
+├── tools/            ← dev only: analyze_sc.py (offline audio analysis), bake-sc-tracks.js, sc-analysis.json
 ├── config.js         ← window.RB_CONFIG = {scClientId:''}; optional, git-ignored, never commit a secret
 ├── js/chart.js       ← buildChart(), FamilyBag (section 4)
 ├── js/game.js        ← game loop, grid render, ball (section 9)
@@ -858,6 +865,10 @@ AudioContext.** So we keep our own clock and correct it against `getPosition`:
 
 ### 8A.6 Automatic beat drop + BPM (`js/drop.js`, added 2026-11-24 after M5)
 
+> **Superseded by 8A.7 for every track in `js/sc-tracks.js`.** The waveform guess below is
+> now only the fallback for tracks that are not in the table. The timing model (SCBeat
+> `leadMs`, `zeroMs`, `fromMs`) and the tap tool are unchanged and still current.
+
 User request: the rapping started before the beat dropped. The widget audio is cross-origin,
 so Web Audio cannot analyse it, and downloading audio is not allowed (constraint 1). Each
 SoundCloud track has a public `waveform_url`; its `.json` form gives 1800 peak values over
@@ -911,6 +922,71 @@ the whole track (50–130 ms each; CORS is open). That envelope is the only inpu
   game on Moments Like This (drop 20.675 s, 90 BPM) playback started at 10.0 s, `time()` = 0 at
   15.34 s, so bar 1 = 20.675 s; manual drop override and reset work; synth games unchanged; no
   console errors. **Not checked by ear.**
+
+### 8A.7 Measured beat data (`tools/analyze_sc.py`, rework 2026-11-24)
+
+**Why.** The user reported wrong BPMs, a ball off the beat and missed drops. Causes: the
+waveform JSON has ~80 ms per value (too coarse for a beat phase), the BPM came from
+autocorrelation (BLIGHT 87.4 instead of 92, Expectations 141 instead of 94) and the drop from
+loudness only. **Reverse engineering of the reference** (therhymegame.com web build, the
+Expo bundle `App-*.js`, static reading, 2026-11-24): it does **no** beat detection. Every
+beat has hand-made metadata `{beatBpm, beatDropMs, beatEndMs}` (bundled example: Roses
+88 / 21800 / 152800; the catalogue comes from their backend), it plays its own MP3 and
+computes `beat = (positionMs + lagAlignmentMs − beatDropMs) / msPerBeat`. SoundCloud's
+API has no beat data (only an optional, usually empty `bpm` integer and the same waveform).
+**Decision (user, 2026-11-24):** measure every track once at development time from the real
+audio, keep only the numbers. The app itself still only streams through the widget.
+
+**Tool.** `tools/analyze_sc.py` (Python 3.12 venv: `yt-dlp librosa imageio-ffmpeg`):
+lists the profile with yt-dlp, downloads each track into a temp folder, analyses it, writes
+`tools/sc-analysis.json`, deletes the audio. `--only slug…` for some tracks, `--local DIR`
+to re-analyse kept files, `RB_DEBUG=1` prints the drop candidates. Then
+`node tools/bake-sc-tracks.js` writes `js/sc-tracks.js` (do not edit it by hand).
+
+**Method** (constant tempo, which DAW-made beats have):
+1. HPSS → onset envelopes (percussive full band + 150 Hz–2.2 kHz "snare" band), hop 11.6 ms.
+2. Tempo: sweep 60–180 BPM (0.05 steps) of *fold sharpness* (onset envelope folded over one
+   beat period; peak / mean). A wrong tempo smears the fold flat. Octave: the reference BPM
+   hint when a candidate agrees within 2 %, else the best candidate in 70–160. Fine search
+   ±0.1 BPM, snap to the whole BPM when it scores ≥ 97 %. Flags 3:2 / 4:3 rivals.
+3. Beat phase: peak of the 48-bin fold (sub-bin parabola); the half-beat alternative wins
+   when the snare band is stronger there. (The first version subtracted the half-beat
+   position and failed on beats with strong 8th notes: Fresh Air was 175 ms off.)
+4. Downbeat: snare backbeat on 2 and 4 gives the bar phase modulo 2; beat 1 vs 3 from section
+   changes (4-beat energy steps of any layer), chord change and kick on that beat.
+5. Drop = where the drum kit (percussive, hi-hat band, low band) steps up ≥ 1.5× and stays;
+   among the beats of the right parity near that step, the one with the biggest *impact*
+   (kick onset + broadband onset + bass step + harmony step, + the bar-stats margin, − 0.1
+   per beat later). This skips pickups and fills (BLIGHT: hats start at 9.8 s, kick + bass
+   at 10.49 s). No step → the drums are in from the start → first sounding downbeat.
+6. End = last beat with the full arrangement, rounded down to whole bars after the drop.
+7. Timing fix (review): the coarse envelopes (n_fft 2048, centred) lag the real transients
+   by ~27 ms, so the first grid was 27 ms late everywhere. Steps 2–6 stay on the coarse grid
+   (all its features share the lag); the reported times move by the lag measured per track
+   on a fine > 2 kHz flux (n_fft 256, hop 32), calibrated on synthetic clicks. 19 tracks
+   measured −22…−35 ms; outliers (eclipse +6, florentine −45) use −27 ms and are flagged.
+8. `tools/sc-overrides.json`: reviewed drop corrections in whole beats, applied by the bake
+   script (your-eyes −1 beat: bass + chords enter there; 2wenty −2 beats: first full kick +
+   808, bar stats agree). The end is re-rounded to whole bars.
+
+**Ground truth / checks:** BLIGHT drop 10.46 s (user by ear: "0:10"); Roses 88 BPM, drop
+21.92 s (reviewer's transient: 21.917 s), end 152.8 s (reference game: 88 / 21.8 / 152.8 — its values are rounded); all 12
+reference BPM hints confirmed except Fresh Air (93 on SoundCloud vs 94). Analysed durations
+match the widget's `duration` within 26 ms (same audio). A reviewer agent measured no BPM
+drift (first vs last 60 s within 0.1 ms on 20 tracks; restraint 4.6 ms ≈ 123.995 BPM). In the app (Roses, 16 bars):
+`position − time()` = `dropMs − leadMs` ± 4 ms, bar 1 = the drop; full song = 48 bars,
+ending at 152.85 s. **Not checked by ear.** `check: true` marks tracks with a flag (tempo
+ambiguity, close drop candidates, weak backbeat); hear those first.
+
+**App side.** `SCW.tempoFor()` adds `endMs`, `measured`, `check`, `base`; the waveform
+analysis skips measured tracks; user saves now carry `v: 2`, and older `rb_scTempo` entries
+(set against the old guesses) are ignored for measured tracks (kept in storage, replaced by
+the next tap/edit); a drop typed within 10 ms of the table value is not stored (the input
+shows 10 ms steps); `barsFor('full')` falls back to the song end when a user drop is too
+close to `endMs`; the bake script warns on overrides for unknown slugs; a full analyzer
+run prunes tracks that left the profile; `~` before the BPM only for guesses and `check` tracks; the
+tempo box says "Измерено от аудиото: …" and "Върни измерените"; `game.js barsFor('full')`
+uses `endMs`. `serve.py` honours `PORT` (the preview tool moves to 8081 when 8080 is busy).
 
 ### 8A.3 Per-track tempo data (`js/sc-tracks.js`)
 
@@ -1200,3 +1276,11 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
   section 14). `node tests/data-check.js .` prints OK; the app loads the lists with no console
   errors. **Next: M6** (end screen), unchanged.
   Later the same session: pruned `basic` (simple words only) and `two` (2 syllables only).
+- **2026-11-24, session 9:** Beat data reworked from the ground up (section 8A.7, user
+  request: wrong BPMs, ball off the beat, drops missed). Reverse-engineered the reference web
+  build (no detection there: hand-made bpm/drop/end per beat). Wrote `tools/analyze_sc.py`
+  (offline librosa analysis of the 21 tracks, audio deleted after) and
+  `tools/bake-sc-tracks.js`; `js/sc-tracks.js` is now generated. App: measured data wins
+  over the waveform guess, `endMs` limits "Цялата песен", new tempo box texts. Verified in the
+  browser (grid lock ± 4 ms, 48-bar full song, user override + reset, no console errors).
+  Reviewed by two agents. **Next: M6** (end screen); the user should hear the `check` tracks.

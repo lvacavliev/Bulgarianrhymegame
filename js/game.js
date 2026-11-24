@@ -141,9 +141,14 @@
   function barsFor(beat, cellDur, duration, engine) {
     if (duration !== 'full') return parseInt(duration, 10) || 16;
     if (beat.src === 'sc' && beat.track) {
-      // the count-in plays before the drop, so all the time after the drop is for rapping
-      const after = (beat.track.durationMs - ((engine && engine.dropMs) || 0)) / 1000;
-      return Math.max(4, Math.floor(after / cellDur / 4));
+      // the count-in plays before the drop, so all the time after the drop is for rapping,
+      // up to the measured end of the beat (the outro is not rapped over) or the song end
+      const drop = (engine && engine.dropMs) || 0;
+      let endMs = (beat.tempo && beat.tempo.endMs) || beat.track.durationMs;
+      // a user drop late in the song can pass the measured end: use the song end then
+      if (endMs - drop < 4 * 4 * cellDur * 1000) endMs = beat.track.durationMs;
+      const after = (endMs - drop) / 1000;
+      return Math.max(4, Math.floor(after / cellDur / 4 + 1e-6)); // epsilon: endMs is a whole bar
     }
     return 64;
   }

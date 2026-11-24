@@ -47,15 +47,19 @@
       return { src: 'sc', id: t.slug, title: t.title,
         meta: `Bizzle Beats · ${bpm ? bpmText(tempo) : 'темпо?'}${t.genre ? ' · ' + t.genre : ''}`,
         cover: null, artwork: t.artwork, emoji: '🎧', link: t.url, bpm: bpm || null,
-        durationSec: (t.durationMs - ((tempo && tempo.dropMs) || 0)) / 1000,
+        durationSec: (((tempo && tempo.endMs) || t.durationMs) - ((tempo && tempo.dropMs) || 0)) / 1000,
         ready: !!bpm, reason: bpm ? null : 'Задай темпото (BPM) на този бийт: тапни в ритъм.',
         track: t, tempo };
     }
     return { src: sel.src, title: 'Твой файл', meta: '', ready: false, reason: 'Идва скоро (M7).' };
   }
 
-  // "~90 BPM" = not checked by ear (table or automatic); a value the user set has no "~"
-  const bpmText = (tempo) => `${tempo.verified || tempo.bpmSrc === 'user' ? '' : '~'}${Math.round(tempo.bpm * 10) / 10} BPM`;
+  // "~90 BPM" = a guess (waveform fallback, or a measurement the analysis flagged); measured
+  // and user values have no "~"
+  const bpmText = (tempo) => {
+    const sure = tempo.bpmSrc === 'user' || tempo.verified || (tempo.bpmSrc === 'table' && !tempo.check);
+    return `${sure ? '' : '~'}${Math.round(tempo.bpm * 10) / 10} BPM`;
+  };
 
   // opts.leadMs (game): count-in length, so that bar 1 lands on the beat drop (SCBeat)
   function makeEngine(opts) {
@@ -131,13 +135,16 @@
     if (document.activeElement !== $('#bpmInput')) $('#bpmInput').value = t.bpm ? Math.round(t.bpm * 100) / 100 : '';
     if (document.activeElement !== $('#startInput')) $('#startInput').value = t.startMs != null ? (t.startMs / 1000).toFixed(2) : '';
     if (document.activeElement !== $('#offsetInput')) $('#offsetInput').value = t.dropMs != null ? (t.dropMs / 1000).toFixed(2) : '';
-    const a = t.auto;
-    $('#tempoAuto').textContent = a
-      ? `Предположение от вълната: дроп ~${(a.dropMs / 1000).toFixed(2)} с, ~${Math.round(a.bpm * 10) / 10} BPM. Може да греши: провери с „Чуй дропа“.`
-        + (t.dropSrc === 'user' || t.bpmSrc === 'user' || t.startMs != null ? ' Сега ползваш твои стойности.'
-          : t.dropSrc === 'table' ? ' Дропът е проверен на ухо.' : '')
-      : (SCW.state === 'ready' ? 'Анализирам вълната на песента…' : '');
+    const a = t.auto, b = t.base;
+    const mine = t.dropSrc === 'user' || t.bpmSrc === 'user' || t.startMs != null ? ' Сега ползваш твои стойности.' : '';
+    $('#tempoAuto').textContent = t.measured
+      ? `Измерено от аудиото: ${Math.round(b.bpm * 100) / 100} BPM, дроп ${(b.dropMs / 1000).toFixed(2)} с.`
+        + (t.check ? ' Анализът не е напълно сигурен: чуй дропа и тапни, ако не съвпада.' : '') + mine
+      : a
+        ? `Предположение от вълната: дроп ~${(a.dropMs / 1000).toFixed(2)} с, ~${Math.round(a.bpm * 10) / 10} BPM. Може да греши: провери с „Чуй дропа“.` + mine
+        : (SCW.state === 'ready' ? 'Анализирам вълната на песента…' : '');
     $('#tempoAutoBtn').classList.toggle('hidden', !t.user);
+    $('#tempoAutoBtn').textContent = t.measured ? 'Върни измерените' : 'Върни автоматичните';
   }
 
   // ---------- preview ----------
@@ -220,9 +227,10 @@
   function saveTempoFromInputs() {
     const c = current();
     if (c.src !== 'sc' || !c.track) return;
-    // only fields that differ from the automatic values are stored as the user's own
+    // only fields that differ from the measured / automatic values are stored as the user's own
     const auto = (c.tempo && c.tempo.auto) || {};
     const table = (window.SC_TRACKS || {})[c.track.slug] || {};
+    const baseDrop = table.dropMs != null ? table.dropMs : auto.dropMs;
     const num = (sel) => { const v = parseFloat($(sel).value); return Number.isFinite(v) ? v : null; };
     let bpm = num('#bpmInput');
     if (!(bpm >= 50 && bpm <= 220)) bpm = null;
@@ -231,7 +239,8 @@
     const st = num('#startInput'), dr = num('#offsetInput');
     const startMs = st != null && st > 0 ? Math.round(st * 1000) : null;
     let dropMs = dr != null && dr >= 0 ? Math.round(dr * 1000) : null;
-    if (dropMs != null && auto.dropMs != null && Math.abs(dropMs - auto.dropMs) < 5) dropMs = null;
+    // the input shows 10 ms steps, so anything within 10 ms of the base value is the base value
+    if (dropMs != null && baseDrop != null && Math.abs(dropMs - baseDrop) <= 10) dropMs = null;
     SCW.saveTempo(c.track.slug, { bpm, startMs, dropMs });
     renderList();
     $('#nowMeta').textContent = current().meta;
@@ -242,7 +251,7 @@
     if (c.src !== 'sc' || !c.track) return;
     SCW.clearTempo(c.track.slug);
     renderList(); renderNow();
-    toast('Темпото и дропът са пак автоматични.');
+    toast(c.tempo && c.tempo.measured ? 'Темпото и дропът са пак измерените.' : 'Темпото и дропът са пак автоматични.');
   });
   // the automatic analysis finishes track by track after the catalogue loads
   let anaTimer = 0;

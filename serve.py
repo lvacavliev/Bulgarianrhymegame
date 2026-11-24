@@ -13,6 +13,7 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+    # PORT (set by the preview tool when 8080 is busy) wins over the argument
+    port = int(os.environ.get("PORT") or (sys.argv[1] if len(sys.argv) > 1 else 8080))
     print(f"Rimoboy: http://127.0.0.1:{port}/  (Ctrl+C to stop)")
     http.server.ThreadingHTTPServer(("127.0.0.1", port), NoCacheHandler).serve_forever()

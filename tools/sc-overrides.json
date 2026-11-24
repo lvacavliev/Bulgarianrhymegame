@@ -1,0 +1,11 @@
+{
+  "_doc": "Reviewed corrections applied by bake-sc-tracks.js on top of sc-analysis.json. dropMs only; endMs is re-rounded to whole bars. Keep check: true until heard by ear.",
+  "your-eyes": {
+    "dropBeats": -1,
+    "note": "review 2026-11-24: bass and chords enter one beat before the tool's pick (low 0.00->0.78, harm 0.31->0.79); chord changes recur at the earlier bar lines"
+  },
+  "2wenty": {
+    "dropBeats": -2,
+    "note": "review 2026-11-24: first full kick + 808 hit; the 2-bar pattern's strongest hits fall on this phase; bar statistics agree"
+  }
+}
