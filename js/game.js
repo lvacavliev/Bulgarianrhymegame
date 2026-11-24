@@ -103,7 +103,7 @@
     if (G.paused) return;
     const stall = G.engine && G.engine.isSC && G.engine.stalled && G.engine.stalled();
     if (idx < COUNT_CELLS) {
-      setHead('Пригответе се!', stall ? 'Зарежда…' : (idx < 0 ? '' : `Започваме след ${COUNT_CELLS - idx}`));
+      setHead('Пригответе се!', stall ? 'Зарежда…' : (idx < 0 ? (G.beat.src === 'sc' && idx < -1 ? 'Слушай интрото…' : '') : `Започваме след ${COUNT_CELLS - idx}`));
     } else {
       const bar = Math.min(G.bars, Math.floor(idx / 4) - COUNTIN_BARS + 1);
       setHead(`Бар ${bar} / ${G.bars}`, stall ? 'Зарежда…' : G.sub);
@@ -137,10 +137,13 @@
   }
 
   // ---------- start ----------
-  function barsFor(beat, cellDur, duration) {
+  // engine: for SoundCloud, engine.dropMs = where bar 1 starts in the song
+  function barsFor(beat, cellDur, duration, engine) {
     if (duration !== 'full') return parseInt(duration, 10) || 16;
-    if (beat.src === 'sc' && beat.durationSec) {
-      return Math.max(4, Math.floor((beat.durationSec / cellDur - COUNT_CELLS) / 4));
+    if (beat.src === 'sc' && beat.track) {
+      // the count-in plays before the drop, so all the time after the drop is for rapping
+      const after = (beat.track.durationMs - ((engine && engine.dropMs) || 0)) / 1000;
+      return Math.max(4, Math.floor(after / cellDur / 4));
     }
     return 64;
   }
@@ -167,7 +170,9 @@
     const beat = window.RB.beats.current();
     const speed = window.RB.settings.speedFactor();
     const cellDur = 60 / beat.bpm / speed;
-    const bars = barsFor(beat, cellDur, S.duration);
+    // SoundCloud: the count-in ends exactly on the beat drop (SCBeat leadMs)
+    const engine = window.RB.beats.makeEngine({ leadMs: COUNT_CELLS * cellDur * 1000 });
+    const bars = barsFor(beat, cellDur, S.duration, engine);
     const list = window.RB.settings.list();
     const chart = Chart.buildChart(bars, window.RB.settings.pattern(), list, window.RB.settings.fill());
 
@@ -191,7 +196,6 @@
     trails.forEach((el) => { el.style.visibility = 'hidden'; });
     setHead('Пригответе се!', beat.src === 'sc' ? 'Зарежда…' : '');
 
-    const engine = window.RB.beats.makeEngine();
     if (!engine) { toast('Този бийт още не става за игра.'); toMenu(); return; }
     G.engine = engine;
     try {

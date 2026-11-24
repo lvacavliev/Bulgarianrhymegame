@@ -45,19 +45,23 @@
       const tempo = SCW.tempoFor(t.slug);
       const bpm = tempo && tempo.bpm;
       return { src: 'sc', id: t.slug, title: t.title,
-        meta: `Bizzle Beats · ${bpm ? (tempo.verified || tempo.user ? '' : '~') + bpm + ' BPM' : 'темпо?'}${t.genre ? ' · ' + t.genre : ''}`,
+        meta: `Bizzle Beats · ${bpm ? bpmText(tempo) : 'темпо?'}${t.genre ? ' · ' + t.genre : ''}`,
         cover: null, artwork: t.artwork, emoji: '🎧', link: t.url, bpm: bpm || null,
-        durationSec: (t.durationMs - ((tempo && tempo.offsetMs) || 0)) / 1000,
+        durationSec: (t.durationMs - ((tempo && tempo.dropMs) || 0)) / 1000,
         ready: !!bpm, reason: bpm ? null : 'Задай темпото (BPM) на този бийт: тапни в ритъм.',
         track: t, tempo };
     }
     return { src: sel.src, title: 'Твой файл', meta: '', ready: false, reason: 'Идва скоро (M7).' };
   }
 
-  function makeEngine() {
+  // "~90 BPM" = not checked by ear (table or automatic); a value the user set has no "~"
+  const bpmText = (tempo) => `${tempo.verified || tempo.bpmSrc === 'user' ? '' : '~'}${Math.round(tempo.bpm * 10) / 10} BPM`;
+
+  // opts.leadMs (game): count-in length, so that bar 1 lands on the beat drop (SCBeat)
+  function makeEngine(opts) {
     const c = current();
     if (c.src === 'synth') return new window.SynthBeat(c.def);
-    if (c.src === 'sc') return new window.SCBeat(c.track, c.tempo, sync);
+    if (c.src === 'sc') return new window.SCBeat(c.track, c.tempo, sync, opts || {});
     return null;
   }
 
@@ -94,7 +98,7 @@
         listEl.innerHTML = items.length ? items.map((t) => {
           const tempo = SCW.tempoFor(t.slug);
           const bpm = tempo && tempo.bpm;
-          const meta = `Bizzle Beats · ${bpm ? (tempo.verified || tempo.user ? '' : '~') + bpm + ' BPM' : fmt(t.durationMs / 1000)}${t.genre ? ' · ' + t.genre : ''}`;
+          const meta = `Bizzle Beats · ${bpm ? bpmText(tempo) : fmt(t.durationMs / 1000)}${t.genre ? ' · ' + t.genre : ''}`;
           const cov = t.artwork ? `background-image:url('${esc(t.artwork)}')` : 'background:#ff7a45';
           return rowHTML(t.slug, t.title, meta, cov, t.artwork ? '' : '🎧', bpm ? '' : 'Настрой темпо');
         }).join('') : '<li class="list-state">Няма такъв бийт.</li>';
@@ -123,10 +127,16 @@
     const show = c.src === 'sc' && !!c.track;
     tempoBox.classList.toggle('hidden', !show);
     if (!show) return;
-    const t = c.tempo || { bpm: null, startMs: 0, offsetMs: 0 };
-    if (document.activeElement !== $('#bpmInput')) $('#bpmInput').value = t.bpm || '';
-    if (document.activeElement !== $('#startInput')) $('#startInput').value = ((t.startMs || 0) / 1000).toFixed(2);
-    if (document.activeElement !== $('#offsetInput')) $('#offsetInput').value = ((t.offsetMs || 0) / 1000).toFixed(2);
+    const t = c.tempo || { bpm: null, startMs: null, dropMs: null };
+    if (document.activeElement !== $('#bpmInput')) $('#bpmInput').value = t.bpm ? Math.round(t.bpm * 100) / 100 : '';
+    if (document.activeElement !== $('#startInput')) $('#startInput').value = t.startMs != null ? (t.startMs / 1000).toFixed(2) : '';
+    if (document.activeElement !== $('#offsetInput')) $('#offsetInput').value = t.dropMs != null ? (t.dropMs / 1000).toFixed(2) : '';
+    const a = t.auto;
+    $('#tempoAuto').textContent = a
+      ? `Автоматично от вълната на песента: дроп на ${(a.dropMs / 1000).toFixed(2)} с, ~${Math.round(a.bpm * 10) / 10} BPM.`
+        + (t.dropSrc === 'user' || t.bpmSrc === 'user' || t.startMs != null ? ' Сега ползваш твои стойности.' : '')
+      : (SCW.state === 'ready' ? 'Анализирам вълната на песента…' : '');
+    $('#tempoAutoBtn').classList.toggle('hidden', !t.user);
   }
 
   // ---------- preview ----------
@@ -149,7 +159,7 @@
       state.preview = eng;
     } else if (c.src === 'sc' && c.track) {
       // preview plays the track from its start point; the tempo is not needed to listen
-      const eng = new window.SCBeat(c.track, c.tempo || { bpm: null, startMs: 0, offsetMs: 0 }, 0);
+      const eng = new window.SCBeat(c.track, c.tempo || { bpm: null, startMs: null, dropMs: null }, 0);
       state.preview = eng;
       $('#previewBtn').textContent = '…';
       eng.onExternalPause = () => { if (state.preview === eng) stopPreview(); };
@@ -207,15 +217,36 @@
   function saveTempoFromInputs() {
     const c = current();
     if (c.src !== 'sc' || !c.track) return;
-    const bpm = parseFloat($('#bpmInput').value);
-    const startMs = Math.max(0, Math.round(parseFloat($('#startInput').value || '0') * 1000));
-    let offsetMs = Math.max(0, Math.round(parseFloat($('#offsetInput').value || '0') * 1000));
-    if (offsetMs < startMs) offsetMs = startMs;
-    SCW.saveTempo(c.track.slug, { bpm: bpm >= 50 && bpm <= 220 ? bpm : null, startMs, offsetMs });
+    // only fields that differ from the automatic values are stored as the user's own
+    const auto = (c.tempo && c.tempo.auto) || {};
+    const table = (window.SC_TRACKS || {})[c.track.slug] || {};
+    const num = (sel) => { const v = parseFloat($(sel).value); return Number.isFinite(v) ? v : null; };
+    let bpm = num('#bpmInput');
+    if (!(bpm >= 50 && bpm <= 220)) bpm = null;
+    const autoBpm = table.bpm || auto.bpm;
+    if (bpm && autoBpm && Math.abs(bpm - autoBpm) < 0.01) bpm = null;
+    const st = num('#startInput'), dr = num('#offsetInput');
+    const startMs = st != null && st > 0 ? Math.round(st * 1000) : null;
+    let dropMs = dr != null && dr >= 0 ? Math.round(dr * 1000) : null;
+    if (dropMs != null && auto.dropMs != null && Math.abs(dropMs - auto.dropMs) < 5) dropMs = null;
+    SCW.saveTempo(c.track.slug, { bpm, startMs, dropMs });
     renderList();
     $('#nowMeta').textContent = current().meta;
   }
-  ['#bpmInput', '#startInput', '#offsetInput'].forEach((s) => $(s).addEventListener('change', saveTempoFromInputs));
+  ['#bpmInput', '#startInput', '#offsetInput'].forEach((s) => $(s).addEventListener('change', () => { saveTempoFromInputs(); renderTempoBox(current()); }));
+  $('#tempoAutoBtn').addEventListener('click', () => {
+    const c = current();
+    if (c.src !== 'sc' || !c.track) return;
+    SCW.clearTempo(c.track.slug);
+    renderList(); renderNow();
+    toast('Темпото и дропът са пак автоматични.');
+  });
+  // the automatic analysis finishes track by track after the catalogue loads
+  let anaTimer = 0;
+  SCW.on('analysis', () => {
+    clearTimeout(anaTimer);
+    anaTimer = setTimeout(() => { if (state.src === 'sc') renderList(); renderNow(); }, 150);
+  });
 
   let taps = [];
   $('#tapBtn').addEventListener('click', () => {

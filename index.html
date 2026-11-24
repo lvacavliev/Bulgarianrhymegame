@@ -35,11 +35,12 @@
       <input type="file" id="fileInput" accept="audio/*" class="hidden">
 
       <div id="tempoBox" class="tempo-box hidden">
-        <label>BPM<input id="bpmInput" type="number" min="50" max="220" step="0.5"></label>
-        <label>Старт (сек)<input id="startInput" type="number" min="0" step="0.05"></label>
-        <label>Първи удар (сек)<input id="offsetInput" type="number" min="0" step="0.01"></label>
+        <label>BPM<input id="bpmInput" type="number" min="50" max="220" step="0.25"></label>
+        <label>Пусни от (сек)<input id="startInput" type="number" min="0" step="0.05" placeholder="авто"></label>
+        <label>Дроп (сек)<input id="offsetInput" type="number" min="0" step="0.01" placeholder="авто"></label>
         <button id="tapBtn" class="btn-ghost full">Тапни темпото</button>
-        <p class="full">Тапвай в ритъм поне 8 пъти. „Първи удар“ = секундата на първия силен удар, от който да броим.</p>
+        <p class="full" id="tempoAuto"></p>
+        <p class="full">Дроп = секундата, в която бийтът влиза изцяло. Първият бар на рапа почва точно там, отброяването е 2 бара преди него. Тапвай в ритъм поне 8 пъти за BPM. <button id="tempoAutoBtn" class="link hidden">Върни автоматичните</button></p>
       </div>
 
       <div class="now-card">
@@ -234,6 +235,7 @@
 <script src="js/audio.js"></script>
 <script src="js/beats.js"></script>
 <script src="js/sc-tracks.js"></script>
+<script src="js/drop.js"></script>
 <script src="js/soundcloud.js"></script>
 <script src="js/chart.js"></script>
 <script src="js/app.js"></script>

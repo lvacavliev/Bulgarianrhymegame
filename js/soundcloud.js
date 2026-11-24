@@ -94,9 +94,11 @@
             artwork: art(s.artwork_url || (s.user && s.user.avatar_url)),
             durationMs: s.duration || 0,
             genre: s.genre || '',
+            waveformUrl: s.waveform_url || null,
           } : null).filter(Boolean);
           S.state = 'ready'; S.emit('state', S.state);
           resolve(S.tracks);
+          S.analyzeAll();
         });
         poll();
       });
@@ -147,44 +149,115 @@
     return S.lastPos + Math.min(performance.now() - S.lastProgPerf, STALL_MS);
   };
 
-  // Tempo for a track: user override (localStorage) > SC_TRACKS table > null
+  // ---------- automatic analysis (js/drop.js) ----------
+  // Results per slug {bpm, dropMs}, kept in localStorage `rb_scAuto` (only numbers, no audio).
+  // Bump AUTO_V when the algorithm in drop.js changes, so old results are recomputed.
+  const AUTO_V = 1;
+  S.auto = {};
+  try {
+    const saved = JSON.parse(localStorage.getItem('rb_scAuto') || 'null');
+    if (saved && saved.v === AUTO_V) S.auto = saved.data || {};
+  } catch (e) { /* ignore */ }
+  const saveAuto = () => { try { localStorage.setItem('rb_scAuto', JSON.stringify({ v: AUTO_V, data: S.auto })); } catch (e) { /* ignore */ } };
+
+  S.analyze = async function (track) {
+    if (S.auto[track.slug]) return S.auto[track.slug];
+    if (!window.RBDrop || !track.waveformUrl) throw new Error('no-waveform');
+    const samples = await window.RBDrop.fetchWaveform(track.waveformUrl);
+    const a = window.RBDrop.analyze(samples, track.durationMs, null);
+    S.auto[track.slug] = { bpm: a.bpm, dropMs: a.dropMs };
+    saveAuto();
+    S.emit('analysis', track.slug);
+    return S.auto[track.slug];
+  };
+  let analyzing = null;
+  S.analyzeAll = function () {
+    if (analyzing) return analyzing;
+    analyzing = (async () => {
+      for (const t of S.tracks) {
+        try { await S.analyze(t); } catch (e) { /* this track stays manual */ }
+      }
+      analyzing = null;
+    })();
+    return analyzing;
+  };
+
+  // Tempo for a track. Each field: the user's own value (localStorage rb_scTempo) > the
+  // SC_TRACKS table (bpm only) > the automatic analysis.
+  //   bpm, bpmSrc ('user'|'table'|'auto'|null)
+  //   dropMs  : bar 1 of the rapping (the beat drop), dropSrc ('user'|'auto'|null)
+  //   startMs : playback start chosen by the user, or null (= automatic, 2 bars before the count-in)
   S.tempoFor = function (slug) {
     let user = null;
     try { user = (JSON.parse(localStorage.getItem('rb_scTempo') || '{}'))[slug] || null; } catch (e) { /* ignore */ }
     const base = (window.SC_TRACKS || {})[slug] || null;
-    if (!user && !base) return null;
-    return Object.assign({ bpm: null, startMs: 0, offsetMs: 0, verified: false }, base, user, user ? { user: true } : {});
+    const auto = S.auto[slug] || null;
+    const u = user || {};
+    // older saves used offsetMs for "first downbeat"; it means the same as dropMs here
+    const uDrop = u.dropMs != null ? u.dropMs : (u.offsetMs > 0 ? u.offsetMs : null);
+    const uStart = u.startMs > 0 ? u.startMs : null;
+    let bpm = null, bpmSrc = null;
+    if (u.bpm) { bpm = u.bpm; bpmSrc = 'user'; } else if (base && base.bpm) { bpm = base.bpm; bpmSrc = 'table'; } else if (auto && auto.bpm) { bpm = auto.bpm; bpmSrc = 'auto'; }
+    let dropMs = null, dropSrc = null;
+    if (uDrop != null) { dropMs = uDrop; dropSrc = 'user'; } else if (auto) { dropMs = auto.dropMs; dropSrc = 'auto'; } else if (base && base.offsetMs) { dropMs = base.offsetMs; dropSrc = 'table'; }
+    if (!bpm && dropMs == null && uStart == null) return null;
+    return { bpm, bpmSrc, dropMs, dropSrc, startMs: uStart, verified: !!(base && base.verified), user: !!user, auto };
   };
+  // fields: bpm (null = not set by the user), startMs (null = auto), dropMs (null = auto)
   S.saveTempo = function (slug, tempo) {
     try {
       const all = JSON.parse(localStorage.getItem('rb_scTempo') || '{}');
-      all[slug] = { bpm: tempo.bpm, startMs: tempo.startMs, offsetMs: tempo.offsetMs };
+      const rec = { bpm: tempo.bpm || null, startMs: tempo.startMs != null ? tempo.startMs : null, dropMs: tempo.dropMs != null ? tempo.dropMs : null };
+      if (!rec.bpm && rec.startMs == null && rec.dropMs == null) delete all[slug]; else all[slug] = rec;
       localStorage.setItem('rb_scTempo', JSON.stringify(all));
     } catch (e) { /* private mode: tempo lives for this session only */ }
+  };
+  S.clearTempo = function (slug) {
+    try {
+      const all = JSON.parse(localStorage.getItem('rb_scTempo') || '{}');
+      delete all[slug];
+      localStorage.setItem('rb_scTempo', JSON.stringify(all));
+    } catch (e) { /* ignore */ }
   };
 
   // ---------- engine ----------
   class SCBeat {
-    // track: an entry of SCW.tracks; tempo: {bpm, startMs, offsetMs}; syncMs: user latency fix
-    constructor(track, tempo, syncMs = 0) {
+    // track: an entry of SCW.tracks; tempo: from SCW.tempoFor; syncMs: user latency fix.
+    // opts.leadMs (game only) = count-in length. Then bar 1 of the rapping lands on the drop:
+    // time() = 0 at dropMs − leadMs, and playback starts 2 bars before that (or at the user's
+    // start). A drop too close to the song start for the count-in moves on by whole bars.
+    // Without opts (menu preview): time() counts from dropMs and playback starts at startMs or 0.
+    constructor(track, tempo, syncMs = 0, opts = {}) {
       this.track = track;
       this.tempo = tempo;
       this.syncMs = syncMs;
       this.isSC = true;
       this.running = false;
-      this.frozenMs = tempo.startMs || 0;
       this.offs = [];
+      const barMs = tempo.bpm ? 240000 / tempo.bpm : 0;
+      let drop = tempo.dropMs || 0;
+      if (opts.leadMs != null) {
+        const lead = opts.leadMs;
+        if (barMs) while (drop < lead) drop += barMs;
+        this.zeroMs = Math.max(0, drop - lead);
+        this.fromMs = tempo.startMs != null ? Math.min(tempo.startMs, this.zeroMs) : Math.max(0, this.zeroMs - 2 * barMs);
+      } else {
+        this.zeroMs = drop;
+        this.fromMs = tempo.startMs || 0;
+      }
+      this.dropMs = drop;
+      this.frozenMs = this.fromMs;
     }
     async start() {
       this.offs.push(S.on('progress', (pos) => this.onProgress(pos)));
       this.offs.push(S.on('externalPause', () => { if (this.running) { this.freeze(); if (this.onExternalPause) this.onExternalPause(); } }));
       S.setVolume(1);
       S.owner = this;
-      await S.play(this.track.index, this.tempo.startMs || 0);
+      await S.play(this.track.index, this.fromMs);
       if (this.stopped) throw new Error('stopped');
       this.anchor(S.lastPos, S.lastProgPerf);
       this.running = true;
-      return 0; // t0: time() is already relative to the first downbeat
+      return 0; // t0: time() is already relative to the first count-in cell
     }
     anchor(pos, perf) { this.aPos = pos; this.aPerf = perf; }
     onProgress(pos) {
@@ -206,7 +279,7 @@
       return this.aPos + (now - this.aPerf);
     }
     stalled() { return this.running && performance.now() - S.lastProgPerf > STALL_MS; }
-    time() { return (this.songMs() - (this.tempo.offsetMs || 0) - this.syncMs) / 1000; }
+    time() { return (this.songMs() - this.zeroMs - this.syncMs) / 1000; }
     freeze() { this.frozenMs = this.songMs(); this.running = false; }
     pause() { this.freeze(); S.pause(); }
     resume() { this.resuming = true; S.resume(); }

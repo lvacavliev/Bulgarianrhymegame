@@ -66,9 +66,16 @@ game.js `endGame()`; keep the element ids in index.html):**
    chips navigate; "Играй пак" gives new words; 360 px; no console errors. Then tick M6 in
    section 14 and add a session log entry.
 
-**Open items carried forward:** BPM/offsets of the SoundCloud tracks are unverified by ear
-(5 tracks have no BPM); the synth beats are not judged by ear; the word lists are small
-(11–23 families each, M9 target 40+).
+**Beat drop (added after M5, section 8A.6):** for SoundCloud beats, bar 1 of the rapping
+starts on the beat drop found in the track's public waveform data (`js/drop.js`); the
+2-bar count-in runs just before it. Tracks without a BPM get an estimated one.
+
+**Open items carried forward:** the automatic drops/BPMs are not checked by ear (Impulse's
+estimate is known wrong: 130 vs the reference 104; Expectations and BLIGHT have no clear
+drop, detected at about 2 s); the app lists only the first 11 SoundCloud tracks, while the
+profile now has 21 (`getSounds()` returns more later; `SCW.load` stops polling early); the
+synth beats are not judged by ear; the word lists are small (11–23 families each, M9 target
+40+). Hosting: the user has a Vercel deployment linked to the GitHub repo.
 
 ---
 
@@ -845,6 +852,44 @@ AudioContext.** So we keep our own clock and correct it against `getPosition`:
 - Add a **"Синхрон" slider (±300 ms)** in the advanced settings. It is applied to
   `songMs` and saved per device (`rb_scLatency`). The widget has an unknown output latency.
 
+### 8A.6 Automatic beat drop + BPM (`js/drop.js`, added 2026-11-24 after M5)
+
+User request: the rapping started before the beat dropped. The widget audio is cross-origin,
+so Web Audio cannot analyse it, and downloading audio is not allowed (constraint 1). Each
+SoundCloud track has a public `waveform_url`; its `.json` form gives 1800 peak values over
+the whole track (50–130 ms each; CORS is open). That envelope is the only input.
+
+- **Drop:** level = median 1-s loudness of the middle 60% of the track. Slide 4-s windows over
+  the first 45% (max 70 s); rise = mean(after) − mean(before), relative to the level. Take the
+  earliest rise ≥ max(60% of the biggest rise, 0.08) whose after-window is ≥ 0.8 × level
+  (later rises are usually a break ending), walk to its local maximum, then refine to the
+  biggest 0.45-s step within ±1.5 s. That onset = bar 1. No such rise → drop 0.
+- **BPM:** autocorrelation of the detrended envelope, a comb over 32 beat lags (long lags give
+  precision despite the coarse values), 70–160 BPM in 0.25 steps; < 80 doubles if close.
+  Matched the reference BPM exactly for Moments Like This, Roses, Expectations, Round The
+  Bend, Enchanted, Behind The Mask, Florentine, The Frogg; Fresh Air 93 vs 94; Impulse 130 vs
+  104 (wrong). The table/user BPM always wins over the estimate.
+- Tried and dropped: folding the envelope at the bar length to find the downbeat phase (the
+  drops did not line up with it) and a rhythmic-pulse feature (too noisy).
+- **Timing model (SCBeat):** `new SCBeat(track, tempo, syncMs, {leadMs})`, `leadMs` = count-in
+  length (8 cells × cellDur, so it follows the game speed). `zeroMs = dropMs − leadMs` is
+  `time() = 0`; playback starts 2 song bars before it (`fromMs`), or at the user's "Пусни от".
+  A drop too early for the count-in moves on by whole song bars (`engine.dropMs`). The ball
+  bounces in place during the intro ("Слушай интрото…"). "Цялата песен" = all bars that fit
+  after the drop. Without `leadMs` (menu preview) nothing changes.
+- **Data:** results `{bpm, dropMs}` per slug in localStorage `rb_scAuto` (`{v: AUTO_V, data}`;
+  bump `AUTO_V` in soundcloud.js after changing drop.js). `SCW.analyzeAll()` runs after the
+  catalogue loads and emits `analysis` per track. `SCW.tempoFor(slug)` → `{bpm, bpmSrc,
+  dropMs, dropSrc, startMs, verified, user, auto}` (user > table > auto per field; an old user
+  `offsetMs` counts as `dropMs`). `SCW.saveTempo(slug, {bpm, startMs, dropMs})` stores only the
+  fields the user changed; `SCW.clearTempo(slug)`.
+- **Tempo box:** BPM, "Пусни от (сек)" (blank = auto), "Дроп (сек)", tap tempo, a line with the
+  automatic values, and "Върни автоматичните" (clears the user's values).
+- Verified 2026-11-24: all 11 listed tracks analysed (no "Настрой темпо" badge left); in a real
+  game on Moments Like This (drop 20.675 s, 90 BPM) playback started at 10.0 s, `time()` = 0 at
+  15.34 s, so bar 1 = 20.675 s; manual drop override and reset work; synth games unchanged; no
+  console errors. **Not checked by ear.**
+
 ### 8A.3 Per-track tempo data (`js/sc-tracks.js`)
 
 SoundCloud's `bpm` field is usually empty. Keep a hand-filled table keyed by the track
@@ -1125,4 +1170,6 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
 - **2026-11-24, session 7:** M5 done (`js/game.js`, `.row.past` CSS, app.js placeholders
   removed). Verified synth + SoundCloud sync, pause/resume, exit, the end hand-off, all
   patterns, speeds, 360 px, no console errors. Code reviewed by an agent; pushed to GitHub
-  `lvacavliev/Bulgarianrhymegame`. **Next: M6** (end screen).
+  `lvacavliev/Bulgarianrhymegame`. Then, on the user's request: automatic beat drop + BPM
+  from the SoundCloud waveform data (section 8A.6): the rapping now starts on the drop.
+  **Next: M6** (end screen).
