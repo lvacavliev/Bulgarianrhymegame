@@ -78,8 +78,8 @@ the JSON to the next session to bake into sc-tracks.js.
 **Open items carried forward:** drops of 20 tracks are only waveform guesses (BLIGHT is set
 by ear: 10.0 s; Expectations' guess of 2 s is doubtful); BPMs are reference hints or
 estimates, not checked by ear; the
-synth beats are not judged by ear; the word lists are small (11–23 families each, M9 target
-40+). Hosting: the user has a Vercel deployment linked to the GitHub repo.
+synth beats are not judged by ear; the 6 word lists now have 400+ words each (58–75
+families; M9 still adds the new theme lists). Hosting: the user has a Vercel deployment linked to the GitHub repo.
 
 ---
 
@@ -1149,6 +1149,7 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
 - [ ] **M7** REC recording + user file beat (tap tempo, offset, full song)
 - [ ] **M8** Tutorial overlay, favourites, keyboard, reduced motion, TV mode
 - [ ] **M9** Word list expansion: each list 40+ families; add 4+ theme lists (5.3 "Lists to add later"); stress review
+  - Done early (2026-11-24, on the user's request): the 6 existing lists grew to basic 473, two 400, newyear 400, mic 400, food 400, hard 401 words (58–75 families each). Stress errors fixed: `отвори/затвори/умори/повтори` (stressed on the next-to-last syllable) left the end-stressed family; `пари` (end-stressed) left `two`; `имам` left `food`; `баса` replaced. Words can repeat across lists (only one list is checked for duplicates). Still open: the new theme lists. Section 5.3 shows the old drafts; `js/words.js` is the source of truth.
 - [ ] **M10** Full test pass (section 13) + fixes; optional: publish as a shareable page
 
 ---
@@ -1195,3 +1196,6 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
   `lvacavliev/Bulgarianrhymegame`. Then, on the user's request: automatic beat drop + BPM
   from the SoundCloud waveform data (section 8A.6): the rapping now starts on the drop.
   **Next: M6** (end screen).
+- **2026-11-24, session 8:** Word lists expanded to 400+ words per list (see the M9 note in
+  section 14). `node tests/data-check.js .` prints OK; the app loads the lists with no console
+  errors. **Next: M6** (end screen), unchanged.
