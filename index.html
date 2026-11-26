@@ -28,7 +28,7 @@
 <main id="menu" class="screen active">
   <!-- party strip (BUILD.md 16.5): shown only while party mode is on -->
   <section id="partyStrip" class="party-strip hidden" aria-label="Парти батъл">
-    <button id="psRoom" class="ps-room" aria-label="Покажи QR кода"><span class="ps-tag">🎉 ПАРТИ</span><b id="psCode"></b><span id="psCount" class="ps-count"></span></button>
+    <button id="psRoom" class="ps-room" aria-label="Покажи QR кода" title="Покажи QR кода"><span id="psQr" class="ps-qr" aria-hidden="true"></span><span class="ps-room-txt"><span class="ps-tag">🎉 ПАРТИ</span><span id="psCount" class="ps-count"></span><span class="ps-hint">Тапни за кода</span></span></button>
     <div class="ps-group">
       <span class="ps-label">Формат</span>
       <div class="chips" id="psMode">
@@ -44,10 +44,9 @@
       </div>
     </div>
     <div class="ps-group ps-names">
-      <span class="ps-label">Рапъри</span>
+      <span class="ps-label">Име</span>
       <input id="psLeft" class="ps-input L" maxlength="24" placeholder="Играч 1 (ляво)" aria-label="Име на рапъра вляво">
       <input id="psRight" class="ps-input R" maxlength="24" placeholder="Играч 2 (дясно)" aria-label="Име на рапъра вдясно">
-      <label class="ps-same"><input type="checkbox" id="psSame"> Същите рапъри</label>
     </div>
   </section>
   <div class="menu-grid">

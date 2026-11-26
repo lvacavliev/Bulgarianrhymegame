@@ -1547,10 +1547,12 @@ overlay.
 
 **Party strip in the menu** (only while party mode is on; above the Play button):
 - Format: chips "Дует" / "1 на 1". Duet also shows "Смяна на всеки: 4 бара | 8 бара".
-- Names: two inputs, **empty by default**, placeholders "Играч 1 (ляво)" / "Играч 2
+- Room: a QR (84px, 64px on a phone) with "🎉 ПАРТИ", the guest count and "Тапни за кода". The room code is not shown
+  in the strip; tapping the QR opens the big party overlay, which shows the code.
+- Names (label "Име"): two inputs, **empty by default**, placeholders "Играч 1 (ляво)" / "Играч 2
   (дясно)". An empty input = the default name. The host can type names or skip them.
-- After every battle, both inputs are cleared again (the next song has other people). A
-  small toggle "Същите рапъри" keeps the names for the next battle (off by default).
+- After every battle, both inputs are cleared again (the next song has other people).
+  (The earlier "Същите рапъри" toggle was removed on 2026-11-27.)
 - Play starts the battle: a new `rounds` row, `phase = 'live'`.
 
 **Mini QR.** While party mode is on, a small QR with the code stays in a corner of the menu,

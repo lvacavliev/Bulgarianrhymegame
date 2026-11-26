@@ -17,11 +17,21 @@
 }
 .ps-room:hover { background: var(--panel-2); }
 .ps-tag { font-weight: 800; font-size: 12px; letter-spacing: 1px; color: var(--gold); }
-.ps-room b { font-family: var(--font-d); letter-spacing: 2px; }
+.ps-room { padding: 8px 16px 8px 8px; gap: 12px; flex: 0 0 auto; }
+.ps-qr { width: 84px; height: 84px; border-radius: 10px; overflow: hidden; background: #fff4d6; flex: 0 0 auto; }
+.ps-qr svg { display: block; width: 100%; height: 100%; }
+.ps-room-txt { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; }
+.ps-hint { color: var(--muted); font-size: 11px; font-weight: 600; }
 .ps-count { color: var(--muted); font-size: 12px; font-weight: 800; }
 .ps-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ps-label { font-size: 11px; letter-spacing: 1.2px; color: var(--muted); font-weight: 800; text-transform: uppercase; }
-.ps-names { flex: 1 1 360px; }
+.ps-names { flex: 1 1 360px; flex-wrap: nowrap; }
+/* wide screens: everything in one row, the names fill the right side */
+@media (min-width: 1000px) {
+  .party-strip { flex-wrap: nowrap; padding: 12px 18px 12px 12px; }
+  .ps-group { flex-wrap: nowrap; flex: 0 0 auto; }
+  .ps-names { flex: 1 1 auto; min-width: 0; }
+}
 .ps-input {
   flex: 1 1 130px; min-width: 0; height: 40px; padding: 0 12px; border-radius: 12px;
   font: 600 14px var(--font-b); color: var(--text); background: var(--panel); border: 1px solid var(--panel-line);
@@ -29,12 +39,12 @@
 .ps-input.L { border-left: 4px solid var(--side-l); }
 .ps-input.R { border-left: 4px solid var(--side-r); }
 .ps-input::placeholder { color: var(--muted); }
-.ps-same { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
-.ps-same input { width: 18px; height: 18px; accent-color: var(--gold); }
 
 @media (max-width: 520px) {
   .party-strip { width: calc(100% - 32px); padding: 12px; gap: 10px; }
+  .ps-names { flex-wrap: wrap; }
   .ps-names .ps-label { width: 100%; }
+  .ps-qr { width: 64px; height: 64px; }
   .ps-input { flex: 1 1 40%; }
 }
 /* the 🎉 button makes 4 top-bar buttons: keep the brand clear of them on a phone */

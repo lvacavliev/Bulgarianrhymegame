@@ -31,7 +31,7 @@
   let busy = false;
   const people = new Map(); // uid -> people row
   const P = { on: false, code: null };
-  const battleCfg = Object.assign({ mode: 'duet', turnBars: 4, same: false, left: '', right: '' }, ss.get('rb_partyBattle') || {});
+  const battleCfg = Object.assign({ mode: 'duet', turnBars: 4, left: '', right: '' }, ss.get('rb_partyBattle') || {});
 
   // ---------- libraries ----------
   let libsP = null;
@@ -177,9 +177,9 @@
     ss.set('rb_partyRoom', code);
     const url = RBNet.joinUrl(code);
     $('#poQr').innerHTML = qrSvg(url);
-    $('#pmQr').innerHTML = $('#poQr').innerHTML;
+    $('#pmQr').innerHTML = $('#psQr').innerHTML = $('#poQr').innerHTML;
     $('#poUrl').textContent = url.replace(/^https?:\/\//, '');
-    $('#poCode').textContent = $('#pmCode').textContent = $('#psCode').textContent = code;
+    $('#poCode').textContent = $('#pmCode').textContent = code;
     drawPeople();
     drawOn();
   }
@@ -260,14 +260,12 @@
     document.querySelectorAll('#psMode .chip').forEach((c) => c.classList.toggle('active', c.dataset.mode === battleCfg.mode));
     document.querySelectorAll('#psTurn .chip').forEach((c) => c.classList.toggle('active', +c.dataset.bars === battleCfg.turnBars));
     $('#psTurnBox').classList.toggle('hidden', battleCfg.mode !== 'duet');
-    $('#psSame').checked = battleCfg.same;
     $('#psLeft').value = battleCfg.left;
     $('#psRight').value = battleCfg.right;
   }
   function saveStrip() {
     battleCfg.left = $('#psLeft').value.slice(0, 24);
     battleCfg.right = $('#psRight').value.slice(0, 24);
-    battleCfg.same = $('#psSame').checked;
     ss.set('rb_partyBattle', battleCfg);
   }
   $('#psMode').addEventListener('click', (e) => {
@@ -279,7 +277,6 @@
     battleCfg.turnBars = +c.dataset.bars; saveStrip(); drawStrip();
   });
   ['#psLeft', '#psRight'].forEach((id) => $(id).addEventListener('input', saveStrip));
-  $('#psSame').addEventListener('change', saveStrip);
   // Enter in a name field plays, like the P key elsewhere in the menu
   ['#psLeft', '#psRight'].forEach((id) => $(id).addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); $('#playBtn').click(); }
@@ -295,9 +292,9 @@
       right: battleCfg.right.trim() || DEFAULT_R,
     };
   }
-  // after a battle: new people next time, unless "Същите рапъри" is on
+  // after a battle: new people next time, so the names reset
   function afterBattle() {
-    if (!battleCfg.same) { battleCfg.left = ''; battleCfg.right = ''; ss.set('rb_partyBattle', battleCfg); }
+    battleCfg.left = ''; battleCfg.right = ''; ss.set('rb_partyBattle', battleCfg);
     drawStrip();
   }
 
