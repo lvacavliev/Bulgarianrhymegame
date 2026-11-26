@@ -361,6 +361,13 @@ details#adv h3 { font-size: 11px; letter-spacing: 1.4px; color: var(--muted); ma
 @media (max-width: 860px) {
   .menu-grid, .end-grid { grid-template-columns: 1fr; }
   :root { --rowH: 52px; --gap: 6px; --label: 18px; }
+  /* end screen: the 3 stats side by side, so the word recap starts higher */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .stats .now-label { grid-column: 1 / -1; }
+  .stat { border-bottom: 0; padding: 8px 0 2px; }
+  .stat + .stat { border-left: 1px solid var(--panel-line); }
+  .stat b { font-size: 24px; }
+  .stat span { font-size: 9.5px; letter-spacing: 1px; }
   .beat-list { max-height: 260px; }
 }
 @media (max-width: 420px) {

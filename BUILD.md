@@ -6,14 +6,15 @@
 
 ---
 
-## START HERE (handoff for a new session, updated after M5, 2026-11-24)
+## START HERE (handoff for a new session, updated after M6, 2026-11-26)
 
-**Status:** M0–M5 done (including M3a). **Next: M6, the end screen.** Then M7 (REC + own
-file), M8 (tutorial, polish), M9 (more words), M10 (full test).
+**Status:** M0–M6 done (including M3a). **Next: M7, REC recording + own file beat.** Then
+M8 (tutorial, polish), M9 (more words), M10 (full test).
 
 **Read in this order:** this section → section 14 (the checklist, with implementation notes
 under each finished milestone: *the code is the source of truth where they differ from
-sections 4–9*) → section 7.5 (end screen copy), 7.6 (dictionary), 7.7 (streak), 9.5.
+sections 4–9*) → section 10 (REC), 8.6 (FileBeat), 7.3 ("＋ Твой бийт" box), 7.5 (record
+card), 8A.5 (REC with SoundCloud = mic only).
 
 **Run / test:**
 - Dev server: preview config `rimoboy` in `.claude/launch.json` (= `python serve.py 8080`,
@@ -25,7 +26,8 @@ sections 4–9*) → section 7.5 (end screen copy), 7.6 (dictionary), 7.7 (strea
 - SoundCloud playback and the AudioContext need a real click first (a `computer`
   left_click on `▶ Играй`, not `element.click()` from JS before any gesture).
 - **The preview pane is often hidden → rAF is throttled and screenshots are stale.** Drive
-  frames by hand with `RB.game.frame()` (draws one frame now) when testing sync.
+  frames by hand with `RB.game.frame()` (draws one frame now) when testing sync. An 8-bar
+  synth game lasts about 27 s: wait, then call `RB.game.frame()` once to trigger the end.
 
 **What exists (globals, all on `window`):**
 
@@ -37,9 +39,11 @@ sections 4–9*) → section 7.5 (end screen copy), 7.6 (dictionary), 7.7 (strea
 | `RB.startGame()` | game.js | async; builds the chart, renders, starts the engine, runs the loop. "Играй пак" calls it too |
 | `RB.toMenu()` | game.js | stops the engine (also the quiet end-screen beat), resumes a suspended ctx, shows the menu |
 | `RB.game` | game.js | `state` (= `G`: `{engine, beat, settings, cellDur, bars, chart, list, total, playSec, cells, ended, paused, ...}`, null when no game), `pause()`, `resume()`, `exit()`, `frame()` |
+| `RB.onGameEnd(G)` | end.js | called by game.js `endGame()` after `showScreen('end')`: stats, streak, recap, beat card, popups, confetti |
+| `RB.end` | end.js | `bumpStreak()` → `{count, changed}`, `openDict(word, famId)`, `cleanup()` (game.js calls it in `toMenu`/`startGame`), `confetti()` |
 | `WORD_LISTS`, `PATTERNS` (+`byId`) | words.js, patterns.js | data |
 | `Chart` | chart.js | `buildChart`, `renderRows(el, chart, {countinRows, revealAll, tap})`, `fitCells(el)`, `FamilyBag`, `shuffle` |
-| `RBAudio` | audio.js | `ensure()`, `ctx`, `master`, `recDest`, `latency()`, `makeOutput`, `buffers`, `mtof` |
+| `RBAudio` | audio.js | `ensure()`, `ctx`, `master`, `recDest` (compressor → MediaStreamDestination, live ctx only), `latency()`, `makeOutput`, `buffers`, `mtof` |
 | `BEATS`, `SynthBeat` | beats.js | 6 synth beats; engine |
 | `SCW`, `SCBeat` | soundcloud.js | SoundCloud widget singleton; engine |
 
@@ -47,23 +51,34 @@ sections 4–9*) → section 7.5 (end screen copy), 7.6 (dictionary), 7.7 (strea
 `time()` (latency-corrected, seconds since the first count-in cell), `setVolume(v, ramp)`,
 `stop(fade)`. Pause: synth `RBAudio.ctx.suspend()/resume()`; SC `engine.pause()/resume()`.
 
-**M6 brief (end screen; put the code in a new `js/end.js` loaded after game.js, or extend
-game.js `endGame()`; keep the element ids in index.html):**
-1. `endGame()` in game.js does: `G.ended = true`, `engine.setVolume(0.5, 1)`,
-   `showScreen('end')`. Hook M6 there (for example `RB.onGameEnd(G)` called from endGame).
-   The engine stays in `G` (it keeps playing quietly); `RB.toMenu()` / "Играй пак" stop it.
-2. Popup `#popup` "Страхотни барове!" + `#popBtn` "Продължи", confetti on `#confetti`
-   (canvas, ~120 particles, 3 s, none with reduced motion).
-3. Stats: `#stDur` = fmt(`G.playSec`), `#stBars` = `G.bars`, `#stStreak` (bumpStreak,
-   `rb_streak`, section 11) + the streak popup (7.7) after the end popup.
-4. Recap `#recap`: `Chart.renderRows(recap, G.chart, {revealAll: true, tap: true})`.
-   A tap on a `.cell.tap` opens `#dictModal` (7.6: family words from `data-fam`, "Още рими"
-   by the last 3 letters across all lists; chips navigate).
-5. Beat card `#eCover/#eTitle/#eMeta/#eLink` from `G.beat`.
-6. `#menuBtn` → `RB.toMenu()` and `#againBtn` → `RB.startGame()` are already wired in
-   game.js. `#recCard` stays hidden until M7.
-7. Verify: 8 bars at 88 BPM → 0:22; streak +1 with `rb_streak.last` = yesterday; dictionary
-   chips navigate; "Играй пак" gives new words; 360 px; no console errors. Then tick M6 in
+**M7 brief (REC + own file beat):**
+1. **FileBeat** (section 8.6): a new class (in beats.js, or a new `js/filebeat.js` loaded
+   before menu-beats.js) with the engine interface above. Pause = `ctx.suspend()` like the
+   synth. It plays through master, so it reaches `recDest`.
+2. **"Твой файл" tab** in menu-beats.js. Today `current()` returns `ready:false,
+   reason:'Идва скоро (M7).'` for `src:'file'`, and the start-up code (line ~385) never
+   restores the file tab. Add a hidden `<input type=file accept="audio/*">`, decode the file,
+   a BPM input (60–200) + "Тапни темпото" (reuse the existing tap-tempo code), "Начало (сек)"
+   (first downbeat) and the help text from 7.3. Save `rb_fileBeat {name, bpm, offset}`.
+   After a reload, show "Зареди файла отново" (the AudioBuffer is not stored).
+   `current()` for a file: title = file name, meta `Твой файл · N BPM`, `durationSec` =
+   buffer duration (game.js `barsFor` uses it for "Цялата песен"), `ready` only when a
+   buffer and a BPM exist.
+3. **REC** (section 10): when `G.settings.rec` is on, ask for the mic in `startGame()`
+   *before* the engine starts. A denied mic → toast, and the game plays without REC.
+   `micSrc → gain 1.3 → recDest`, never to the speakers. `MediaRecorder(recDest.stream)`,
+   mime type per section 10. Start it when the count-in starts and show `#recBadge`
+   (game.js `fillPlayer` hides it). Stop it in `endGame()` → blob → `#recCard`
+   (`#recAudio.src`, `#recDl.href`, `download = rimoboy-YYYY-MM-DD-HHMM.webm`, or `.m4a`
+   for mp4). Stop the mic tracks. Exit mid-game → discard the recording. Revoke the previous
+   blob URL on a new game. With SC beats the recording is mic only (8A.5; `#recNote`
+   already says so). Hide `#recCard` again when a game without REC ends (end.js
+   `onGameEnd` is the place to toggle it).
+4. Verify: the file beat plays in the preview and in the game, with the ball on the grid
+   (test with a generated WAV click track at a known BPM, made in the scratchpad and not
+   committed); "Цялата песен" with a file; REC with a synth beat gives a playable blob with
+   sound (check `blob.size`, decode it with `decodeAudioData`); mic denied → the game still
+   plays; exit during REC → no record card; 360 px; no console errors. Then tick M7 in
    section 14 and add a session log entry.
 
 **Beat data for SoundCloud (reworked 2026-11-24, section 8A.7):** BPM, beat drop and end
@@ -306,6 +321,7 @@ rhyme game bulgarian/
 ├── config.js         ← window.RB_CONFIG = {scClientId:''}; optional, git-ignored, never commit a secret
 ├── js/chart.js       ← buildChart(), FamilyBag (section 4)
 ├── js/game.js        ← game loop, grid render, ball (section 9)
+├── js/end.js         ← end screen, streak, rhyme dictionary (sections 7.5–7.7, 9.5)
 └── js/app.js         ← menu, settings, modals, screens, tutorial, streak (sections 6, 7, 11)
 ```
 
@@ -1221,7 +1237,16 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
   - The app.js placeholders for `#exitBtn`/`#menuBtn` are removed. `#menuBtn` → `RB.toMenu()`, `#againBtn` → `RB.startGame()`, brand click on the end screen → `RB.toMenu()`.
   - Verified (session 7): synth 90 BPM / 8 bars, cellDur 0.667 s, 0 lit-cell mismatches over 81 hand-driven frames; header and row scroll correct; pause freezes `time()` (delta 0), resume keeps the sync; end → `end` screen with gain 0.45 (0.9 × 0.5), "Меню" stops the beat; all 10 patterns put words exactly on the chart cells (+8 count-in cells, none in the count-in); speeds 2x/0.5x → cellDur 0.333/1.333, meta shows the speed; 360 px: no horizontal scroll, 0 overflowing words (min font 11.6 px); SoundCloud "Roses" (~88 BPM) after a real click: 0 mismatches over 59 frames, pause/resume keeps the sync with `SCW.position()`, Esc stops SoundCloud; no console errors. **Not judged by ear** (ball-on-kick feel, Bluetooth latency).
   - Agent code review fixes (session 7): `SCW.play` no longer trusts `S.playing` right after a `pause()` (new `pausePending` flag; it always sends `play()` then), so "Играй пак" on a SoundCloud beat no longer times out. `SCW.owner`: only the SCBeat that started playback may pause the widget on `stop()`, so a stale start (exit during loading, then Play again) cannot silence the new game. `SCW.playGen`: an older `play()` call rejects with `superseded`. `expectPause` is cleared on `resume()` and FINISH. In game.js: a pause during the start is latched (`pendingPause`) and applied once the beat runs (also when the tab is hidden); held keys (`e.repeat`) are ignored; geometry is re-measured after `document.fonts.ready`; a restart fades the old synth beat in 0.05 s. Re-verified: SC game, SC restart, SC exit-during-load + replay, synth restart, no console errors.
-- [ ] **M6** End screen: popup, confetti, stats, recap grid, dictionary modal, streak, play again
+- [x] **M6** End screen: popup, confetti, stats, recap grid, dictionary modal, streak, play again (session 10)
+  - New file **`js/end.js`** (loads after game.js). `game.js endGame()` now cancels the rAF, dims the beat (`setVolume(0.5, 1)`), shows the end screen and calls **`RB.onGameEnd(G)`**. `toMenu()` and `startGame()` call **`RB.end.cleanup()`** (it hides the popups and the dictionary and stops the confetti), so every way off the end screen is covered.
+  - Stats: `Време` = `G.playSec` rounded to the nearest second (8 bars at 88 BPM = 21.8 s → 0:22). The game player total `#gDur` uses the same rounding now. `Барове` = `G.bars`. `Поредни дни` = `bumpStreak()` (`rb_streak {last, count}`, local `toLocaleDateString('sv')`; same day: no change; yesterday: +1; otherwise, or junk data: 1).
+  - The popups reuse `#popup`. First "Страхотни барове!" (🎉, sub line "8 бара · 0:21", button "Продължи", Esc closes it). When the streak changed today, closing it opens the streak popup ("🔥 N поредни дни!" / "Първи ден от поредицата!", no button; it closes on any tap or after 2.5 s). The "Продължи" click calls `stopPropagation()`. Without it, the same click closed the streak popup at once.
+  - Confetti on `#confetti`: 120 rotating paper pieces, 3 s with a fade in the last 0.6 s, frame-rate independent, colours from the `--r1..--r6` and `--gold` tokens. None with `prefers-reduced-motion`.
+  - Recap: `Chart.renderRows(recap, G.chart, {revealAll: true, tap: true})`. Tap cells get `tabindex=0`, `role=button` and Enter/Space. The hint hides when there are no words (blank game). The words are re-fitted on resize.
+  - Dictionary (`RB.end.openDict(word, famId)`): an index over all lists except "Микс" (it reuses the same family objects). "Рими" = the other words of the family. "Още рими" = up to 40 words of other families that end in the same last 3 letters. **Added beyond the spec:** when no word matches 3 letters, it falls back to the last 2 letters (for example "банан" had no "-нан" match; now it shows роман, екран, план…). Chips open their word. Focus goes to ✕, and Tab is trapped in the dialog.
+  - Beat card `#eCover/#eTitle/#eMeta/#eLink` (the speed is appended to the meta; the SoundCloud link shows only for SC beats).
+  - CSS: at ≤860 px the 3 stats sit in one row, so the word recap starts higher on a phone.
+  - Verified (session 10): synth "Софийски нощи" 90 BPM, 8 bars → 0:21, 8 recap rows, 8 tap words; streak with `last` = yesterday and count 3 → 4, and the "4 поредни дни!" popup closes after 2.5 s; same day again → stays 4, no streak popup; `bumpStreak` edge cases (none, old date, yesterday, today, junk); dictionary: рой → бой (chip) → прибой ("Още рими"), Esc closes it; "Играй пак" → new words, popups cleared; "Меню" → `G` null, beat stopped; fake 88 BPM → 0:22; blank chart → hint hidden; 360 px: no horizontal scroll, 0 overflowing words (min font 11 px); no console errors. `node tests/data-check.js .` prints OK.
 - [ ] **M7** REC recording + user file beat (tap tempo, offset, full song)
 - [ ] **M8** Tutorial overlay, favourites, keyboard, reduced motion, TV mode
 - [ ] **M9** Word list expansion: each list 40+ families; add 4+ theme lists (5.3 "Lists to add later"); stress review
@@ -1284,3 +1309,8 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
   over the waveform guess, `endMs` limits "Цялата песен", new tempo box texts. Verified in the
   browser (grid lock ± 4 ms, 48-bar full song, user override + reset, no console errors).
   Reviewed by two agents. **Next: M6** (end screen); the user should hear the `check` tracks.
+- **2026-11-26, session 10:** M6 done (`js/end.js`, hooks in game.js `endGame`/`toMenu`/
+  `startGame`, stats-row CSS for phones). Verified in the browser (see the M6 notes in
+  section 14): stats, streak + popup, confetti, recap, dictionary navigation, "Играй пак",
+  "Меню", 360 px, no console errors. Fixed one bug found in the test (the streak popup closed
+  at once). **Next: M7** (REC + own file beat).

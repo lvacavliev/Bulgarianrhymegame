@@ -168,6 +168,7 @@
   }
 
   async function startGame() {
+    if (window.RB.end) window.RB.end.cleanup(); // end-screen popups/confetti
     stopEngine(0.05); // short fade: "Играй пак" must not overlap two beats
     window.RB.beats.stopPreview();
     const my = ++token;
@@ -193,7 +194,7 @@
     Chart.renderRows(rowsEl, chart, { countinRows: COUNTIN_BARS });
     G.cells = Array.from(rowsEl.querySelectorAll('.cell'));
     fillPlayer(beat, S);
-    $('#gDur').textContent = fmt(G.playSec);
+    $('#gDur').textContent = fmt(Math.round(G.playSec)); // same rounding as the end screen
     measure();
     // web fonts change the word sizes: re-measure once they are in
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (G && G.chart === chart) measure(); });
@@ -257,6 +258,7 @@
 
   function toMenu() {
     token++;
+    if (window.RB.end) window.RB.end.cleanup();
     stopEngine();
     $('#pauseOv').classList.add('hidden');
     showScreen('menu');
@@ -272,12 +274,14 @@
     toMenu();
   }
 
-  // ---------- end (M6 builds the full end screen) ----------
+  // ---------- end (end screen itself: js/end.js, RB.onGameEnd) ----------
   function endGame() {
     G.ended = true;
+    cancelAnimationFrame(G.raf);
     if (G.litEl) G.litEl.classList.remove('lit');
     G.engine.setVolume(0.5, 1);
     showScreen('end');
+    if (window.RB.onGameEnd) window.RB.onGameEnd(G);
   }
 
   // ---------- events ----------
@@ -286,7 +290,7 @@
   $('#resumeBtn').addEventListener('click', (e) => { blurBtn(e); resume(); });
   $('#quitBtn').addEventListener('click', toMenu);
   $('#exitBtn').addEventListener('click', exitGame);
-  // end screen: stop the quiet beat when leaving (M6 extends these)
+  // end screen: stop the quiet beat when leaving (end.js cleans up its popups in toMenu/startGame)
   $('#menuBtn').addEventListener('click', toMenu);
   $('#againBtn').addEventListener('click', () => startGame());
 
