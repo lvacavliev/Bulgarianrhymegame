@@ -61,7 +61,9 @@
     sec = Math.max(0, Math.floor(sec));
     return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
   };
-  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // a URL inside CSS url('…'): percent-encode the characters that could end the string
+  const cssUrl = (u) => String(u).replace(/['"\\()\s]/g, (c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'));
 
   // ---------- current selection ----------
   function scTrack(slug) { return SCW.tracks.find((t) => t.slug === slug) || null; }
@@ -168,7 +170,7 @@
           const tempo = SCW.tempoFor(t.slug);
           const bpm = tempo && tempo.bpm;
           const meta = `Bizzle Beats · ${bpm ? bpmText(tempo) : fmt(t.durationMs / 1000)}${t.genre ? ' · ' + t.genre : ''}`;
-          const cov = t.artwork ? `background-image:url('${esc(t.artwork)}')` : 'background:#ff7a45';
+          const cov = t.artwork ? `background-image:url('${esc(cssUrl(t.artwork))}')` : 'background:#ff7a45';
           return rowHTML(t.slug, t.title, meta, cov, t.artwork ? '' : '🎧', bpm ? '' : 'Настрой темпо', 'sc');
         }).join('') : '<li class="list-state">Няма такъв бийт.</li>';
       }

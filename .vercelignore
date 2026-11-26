@@ -2,3 +2,9 @@
 # Supabase project from anyone's browser).
 tests/
 tools/
+# Dev notes, local server and database schema: not needed by the site, kept off the public URL.
+BUILD.md
+party/
+serve.py
+start.bat
+.claude/
