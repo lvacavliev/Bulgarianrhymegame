@@ -11,9 +11,8 @@
 **Status:** M0–M10 done (including M3a). The solo game is complete. Open: the user's home
 tests (the checklist at the top of the M10 notes in section 14) and party mode.
 The party is on 2026-12-31.
-**Also scoped (2026-11-26), not built:** party mode, section 16 (QR join, phone voting, live
-reactions, ranking; Supabase; duet + 1v1). Milestones P0–P5 in 16.10, decisions in 16.12.
-**P0–P5 done** (Supabase `rimoboy`, `party/schema.sql`, `party-net.js`, `party-host.js`,
+**Party mode** (section 16: QR join, phone voting, live reactions, ranking; Supabase; duet +
+1v1; milestones in 16.10, decisions in 16.12): **P0–P5 done** (Supabase `rimoboy`, `party/schema.sql`, `party-net.js`, `party-host.js`,
 `party-battle.js`, `party-vote.js`, `party.html`). Open: a rehearsal with real phones and
 a TV before 2026-12-20 (section 16.10).
 

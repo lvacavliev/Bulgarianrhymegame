@@ -1,7 +1,27 @@
 /* Rimoboy party mode: host side in index.html (BUILD.md 16.5). Uses the tokens of style.css. */
 :root { --side-l: #4f8cff; --side-r: #ff5a4f; }
 
-#partyBtn.on { border-color: var(--gold); background: rgba(255, 201, 74, .16); }
+/* the 🎉 button is the main call to action of the top bar: a gold pill like "Играй" */
+#partyBtn {
+  width: auto; border-radius: 999px; padding: 0 16px; display: flex; align-items: center; gap: 6px;
+  border: 0; color: var(--ink); font: 800 15px var(--font-d); white-space: nowrap;
+  background: linear-gradient(160deg, var(--gold), var(--gold-2));
+  box-shadow: 0 4px 16px rgba(255, 159, 28, .4); transition: transform .12s, box-shadow .12s;
+}
+#partyBtn:hover { background: linear-gradient(160deg, #ffd66e, var(--gold)); box-shadow: 0 6px 22px rgba(255, 159, 28, .55); transform: translateY(-1px); }
+#partyBtn:active { transform: none; }
+#partyBtn span { font-size: 17px; }
+#partyBtn .pb-txt { font-weight: 800; }
+/* guests have joined (.live): the job of the button is done, so it shrinks to the emoji.
+   A phone has no room for the word next to the brand either. */
+#partyBtn.live { padding: 0 12px; }
+#partyBtn.live .pb-txt { display: none; }
+@media (max-width: 480px) {
+  #partyBtn { padding: 0 12px; }
+  #partyBtn .pb-txt { display: none; }
+}
+/* party running: a light ring shows it is on */
+#partyBtn.on { box-shadow: 0 0 0 2px var(--bg-1, #07061a), 0 0 0 4px var(--gold), 0 4px 18px rgba(255, 159, 28, .5); }
 
 /* ---------- party strip (menu) ---------- */
 .party-strip {
@@ -41,7 +61,7 @@
 .ps-input::placeholder { color: var(--muted); }
 
 @media (max-width: 520px) {
-  .party-strip { width: calc(100% - 32px); padding: 12px; gap: 10px; }
+  .party-strip { padding: 12px; gap: 10px; }
   .ps-names { flex-wrap: wrap; }
   .ps-names .ps-label { width: 100%; }
   .ps-qr { width: 64px; height: 64px; }
@@ -49,6 +69,7 @@
 }
 /* the 🎉 button makes 4 top-bar buttons: keep the brand clear of them on a phone */
 @media (max-width: 420px) {
+  .party-strip { width: calc(100% - 32px); } /* matches the 16px menu padding */
   .top-actions { gap: 6px; }
   .top-actions .icon-btn { width: 36px; height: 36px; font-size: 16px; }
   .brand { font-size: 19px; }

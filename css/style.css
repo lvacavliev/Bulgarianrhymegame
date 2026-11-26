@@ -85,7 +85,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* ---------- MENU ---------- */
 .menu-grid {
   display: grid; grid-template-columns: 1fr 1.2fr; gap: 18px;
-  max-width: 1180px; margin: 0 auto; padding: 0 20px 130px;
+  max-width: 1220px; margin: 0 auto; padding: 0 20px 130px; /* 1180px content, same as .party-strip */
 }
 .panel {
   background: var(--panel); border: 1px solid var(--panel-line);
