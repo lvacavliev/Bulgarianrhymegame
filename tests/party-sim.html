@@ -97,6 +97,7 @@ Anonymous sign-ins are limited to 30 per hour per IP; the sessions are kept per 
     const B = hostFeed(codeB, new Set([phoneB.uid]));
     hostB.hostListen(B.handlers);
     await waitFor(() => B.status.db === 'SUBSCRIBED' && B.status.up === 'SUBSCRIBED', 15000);
+    await sleep(1500); // Postgres Changes need a moment after SUBSCRIBED (the real host also reloads the list)
     await phoneB.join(codeB, 'Стая Б');
     log('room B =', codeB);
 

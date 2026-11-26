@@ -182,3 +182,64 @@ body.tv .pfx-bar { height: 12px; }
 @media (prefers-reduced-motion: reduce) {
   .pfx-edge.pulse, .pfx-burst.show, .pfx-call.show { animation-duration: .01s; }
 }
+
+/* ---------- vote + results (P5) ---------- */
+.pv-dialog { width: min(1000px, 100%); max-height: 94vh; }
+.pv-count { margin: 0; font: 800 clamp(44px, 8vw, 96px) var(--font-d); color: var(--gold); line-height: 1; }
+.pv-winner { margin: 6px 0 0; min-height: 0; font: 800 clamp(24px, 4vw, 48px) var(--font-d); color: var(--gold); }
+.pv-winner:empty { display: none; }
+.pv-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0 10px; }
+.pv-col {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px; border-radius: 20px;
+  background: var(--panel); border: 2px solid var(--panel-line); transition: transform .5s, box-shadow .5s, opacity .5s;
+}
+.pv-col.L { border-color: rgba(79, 140, 255, .5); }
+.pv-col.R { border-color: rgba(255, 90, 79, .5); }
+.pv-name { font: 800 clamp(16px, 2.4vw, 26px) var(--font-d); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-col.L .pv-name { color: var(--side-l); }
+.pv-col.R .pv-name { color: var(--side-r); }
+.pv-avg { font: 800 clamp(40px, 7vw, 84px) var(--font-d); line-height: 1.05; }
+.pv-n { color: var(--muted); font-weight: 800; font-size: 14px; }
+.pv-bar { width: 100%; height: 12px; border-radius: 999px; background: rgba(255, 255, 255, .08); overflow: hidden; margin-top: 6px; }
+.pv-bar i { display: block; height: 100%; width: 0; transition: width .5s ease-out; }
+.pv-col.L .pv-bar i { background: var(--side-l); }
+.pv-col.R .pv-bar i { background: var(--side-r); }
+.pv-col.win { transform: scale(1.06); box-shadow: 0 0 0 3px var(--gold), 0 0 40px rgba(255, 201, 74, .45); }
+.pv-col.lose { opacity: .6; }
+.pv-feed { display: flex; flex-direction: column; gap: 4px; max-height: 26vh; overflow: hidden; text-align: left; }
+.pv-feed:empty { display: none; }
+.pv-line { padding: 6px 12px; border-radius: 12px; background: var(--panel); font-weight: 600; animation: poPop .3s ease-out; display: flex; gap: 10px; flex-wrap: wrap; }
+.pv-line b { font-weight: 800; }
+.pv-line .L { color: var(--side-l); } .pv-line .R { color: var(--side-r); }
+.pv-after h3 { font: 800 15px var(--font-d); margin: 14px 0 8px; color: var(--muted); }
+.pv-table-wrap { max-height: 32vh; overflow-y: auto; border-radius: 14px; border: 1px solid var(--panel-line); }
+.pv-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.pv-table th, .pv-table td { padding: 7px 12px; text-align: left; border-bottom: 1px solid var(--panel-line); }
+.pv-table th { position: sticky; top: 0; background: var(--bg-1); font-weight: 800; }
+.pv-table th.L { color: var(--side-l); } .pv-table th.R { color: var(--side-r); }
+.pv-table td.st { color: var(--gold); letter-spacing: 2px; white-space: nowrap; }
+.pv-table td.none { color: var(--muted); }
+.pv-extra { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; text-align: left; }
+.pv-extra ol { margin: 0; padding-left: 22px; font-weight: 700; }
+.pv-extra li { margin: 3px 0; }
+.pv-extra li small { color: var(--muted); font-weight: 600; }
+body.tv .pv-table { font-size: 20px; }
+body.tv .pv-line { font-size: 20px; }
+body.tv .pv-extra ol { font-size: 20px; }
+@media (max-width: 720px) {
+  .pv-cols { gap: 8px; }
+  .pv-col { padding: 10px; }
+  .pv-extra { grid-template-columns: 1fr; }
+}
+
+/* history in the party overlay */
+.po-hist { margin-top: 14px; text-align: left; }
+.po-hist summary { cursor: pointer; font-weight: 800; color: var(--muted); }
+.po-hist[open] summary { margin-bottom: 8px; }
+#poHistBody { max-height: 34vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.ph-item { padding: 10px 12px; border-radius: 14px; background: var(--panel); border: 1px solid var(--panel-line); }
+.ph-item .ph-title { font-weight: 800; }
+.ph-item .ph-sub { color: var(--muted); font-size: 13px; }
+.ph-item table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 13px; }
+.ph-item td, .ph-item th { padding: 3px 6px; text-align: left; border-bottom: 1px solid var(--panel-line); }
+.ph-item td.st { color: var(--gold); white-space: nowrap; }

@@ -275,6 +275,10 @@
         <p class="po-status" id="poStatus" role="status"></p>
       </div>
     </div>
+    <details class="po-hist" id="poHist">
+      <summary>История на батълите</summary>
+      <div id="poHistBody"><p class="po-hint">Зарежда…</p></div>
+    </details>
     <div class="dialog-actions">
       <button class="btn-primary" id="poOk">Затвори</button>
       <button class="btn-ghost" id="poNew">Нова стая</button>
@@ -282,6 +286,35 @@
     </div>
   </div>
 </div>
+<!-- party vote + results (BUILD.md 16.6) -->
+<div id="partyVote" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pvTitle">
+  <div class="dialog pv-dialog">
+    <h2 id="pvTitle" tabindex="-1" data-autofocus>Гласувайте сега!</h2>
+    <p class="pv-count" id="pvCount" aria-live="off"></p>
+    <p class="pv-winner" id="pvWinner" role="status"></p>
+    <div class="pv-cols">
+      <div class="pv-col L" id="pvColL"><span class="pv-name" id="pvNameL"></span><b class="pv-avg" id="pvAvgL">–</b><span class="pv-n" id="pvNL"></span><div class="pv-bar"><i id="pvBarL"></i></div></div>
+      <div class="pv-col R" id="pvColR"><span class="pv-name" id="pvNameR"></span><b class="pv-avg" id="pvAvgR">–</b><span class="pv-n" id="pvNR"></span><div class="pv-bar"><i id="pvBarR"></i></div></div>
+    </div>
+    <div class="pv-feed" id="pvFeed"></div>
+    <div class="pv-after hidden" id="pvAfter">
+      <h3>Кой как гласува</h3>
+      <div class="pv-table-wrap" id="pvTableWrap">
+        <table class="pv-table"><thead><tr><th>Гост</th><th class="L" id="pvThL"></th><th class="R" id="pvThR"></th></tr></thead><tbody id="pvTable"></tbody></table>
+      </div>
+      <div class="pv-extra">
+        <div><h3>🔥 Топ хайпъри</h3><ol id="pvHypers"></ol></div>
+        <div><h3>👑 Класиране на вечерта</h3><ol id="pvRank"></ol></div>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn-ghost" id="pvStop">Край на гласуването</button>
+      <button class="btn-primary hidden" id="pvNext">Нов батъл</button>
+      <button class="btn-ghost hidden" id="pvClose">Затвори</button>
+    </div>
+  </div>
+</div>
+
 <!-- party battle effects (BUILD.md 16.5): side glows, flying reactions, hype meter, hype calls -->
 <div id="partyFx" class="party-fx hidden" aria-hidden="true">
   <div class="pfx-edge L" id="pfxEdgeL"></div><div class="pfx-edge R" id="pfxEdgeR"></div>
@@ -326,5 +359,6 @@
 <script src="js/party-net.js"></script>
 <script src="js/party-host.js"></script>
 <script src="js/party-battle.js"></script>
+<script src="js/party-vote.js"></script>
 </body>
 </html>

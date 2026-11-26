@@ -80,6 +80,7 @@
     net.hostListen({
       onPeople: (row) => { if (row && row.uid && row.room === P.code) { people.set(row.uid, row); drawPeople(); } },
       onReaction: (p) => { if (P.onReaction) P.onReaction(p); }, // js/party-battle.js
+      onVote: (row) => { if (row && P.onVote) P.onVote(row); }, // js/party-vote.js
       onStatus: (k, st) => {
         if (k !== 'db') return;
         if (st === 'SUBSCRIBED') { status(''); reloadPeople(); }
@@ -124,6 +125,7 @@
     const code = await net.createRoom();
     await net.unlisten();
     if (P.onRoomGone) P.onRoomGone(); // a running battle belonged to the old room
+    if (P.onRoomGone2) P.onRoomGone2(); // and so did a vote on screen
     clearPeople();
     setOn(code);
     listen();
@@ -141,7 +143,8 @@
       if (!room || (room.state && room.state.phase === 'closed')) { ss.del('rb_partyRoom'); return; }
       setOn(code);
       listen();
-      reloadPeople();
+      await reloadPeople();
+      if (P.resumeRoom) P.resumeRoom(room.state); // a vote that was running continues
     } catch (e) {
       toast('Парти стаята не се зареди. Натисни 🎉 за нова.');
     } finally { busy = false; }
@@ -153,6 +156,7 @@
     // stop the battle first and block its queued writes, so nothing reopens the closed room
     P.closing = true;
     if (P.onRoomGone) P.onRoomGone();
+    if (P.onRoomGone2) P.onRoomGone2();
     let ok = false;
     for (let i = 0; i < 2 && !ok; i++) {
       try { await net.patchState({ phase: 'closed' }); ok = true; } catch (e) { /* retry once */ }

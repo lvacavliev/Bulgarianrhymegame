@@ -147,7 +147,8 @@
     async startVote(seconds) {
       const { data, t0, t1 } = await this.rpc('start_vote', { p_room: this.code, p_seconds: seconds });
       this.syncClock(data.now, t0, t1);
-      await this.loadRoom(this.code);
+      // the vote runs now: a failed re-read must not look like a failed start
+      try { await this.loadRoom(this.code); } catch (e) { this.state = Object.assign({}, this.state, { phase: 'vote', voteEndsAt: data.voteEndsAt, turn: null }); }
       return data; // {round, voteEndsAt, now}
     }
 
@@ -155,7 +156,7 @@
     async finishVote() {
       const { data, t0, t1 } = await this.rpc('finish_vote', { p_room: this.code });
       this.syncClock(data.now, t0, t1);
-      await this.loadRoom(this.code);
+      try { await this.loadRoom(this.code); } catch (e) { this.state = Object.assign({}, this.state, { phase: 'results' }); }
       return data;
     }
 

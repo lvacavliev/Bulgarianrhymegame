@@ -353,3 +353,61 @@ create policy party_rt_read on realtime.messages for select to authenticated
   using ((select private.rt_can_read(realtime.topic())));
 create policy party_rt_send on realtime.messages for insert to authenticated
   with check (realtime.messages.extension = 'broadcast' and (select private.rt_can_send(realtime.topic())));
+
+-- =====================================================================================
+-- P4/P5 review fixes (migrations "party_vote_fixes" + "party_vote_errcode", 2026-11-26)
+-- errcode RB004 = wrong phase (P0004 would be ASSERT_FAILURE, which handlers cannot catch)
+-- =====================================================================================
+
+-- vote_open takes a share lock on the room row: finish_vote's FOR UPDATE waits for votes
+-- that are being written, and votes after it see phase 'results' (no vote lost after the tally)
+create or replace function private.vote_open(r text, rd int) returns boolean
+language plpgsql volatile security definer set search_path = '' as $$
+declare st jsonb; ends timestamptz;
+begin
+  select state into st from public.rooms where id = r for share;
+  if st is null or st ->> 'phase' <> 'vote' or st ->> 'round' <> rd::text then return false; end if;
+  select vote_ends_at into ends from public.rounds where room = r and round = rd;
+  return ends is not null and now() < ends + interval '2 seconds';
+end $$;
+
+-- start_vote: only from a running battle, never on a round that already has results
+create or replace function public.start_vote(p_room text, p_seconds int) returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+declare
+  n    int;
+  ph   text;
+  ends timestamptz := now() + make_interval(secs => greatest(5, least(120, p_seconds)));
+begin
+  if not private.is_host(p_room) then raise exception 'not the host' using errcode = '42501'; end if;
+  select (state ->> 'round')::int, state ->> 'phase' into n, ph from public.rooms where id = p_room for update;
+  if n is null then raise exception 'no round' using errcode = 'P0001'; end if;
+  if ph not in ('live', 'between') then raise exception 'no battle running' using errcode = 'RB004'; end if;
+  if exists (select 1 from public.rounds where room = p_room and round = n and results is not null) then
+    raise exception 'round already has results' using errcode = 'RB004';
+  end if;
+  update public.rounds set vote_ends_at = ends where room = p_room and round = n;
+  update public.rooms
+  set state = state || jsonb_build_object('phase', 'vote', 'voteEndsAt', ends, 'turn', null)
+  where id = p_room;
+  return jsonb_build_object('round', n, 'voteEndsAt', ends, 'now', now());
+end $$;
+
+-- finish_vote: only from 'vote' (or again from 'results', so a retry is safe)
+create or replace function public.finish_vote(p_room text) returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+declare n int; ph text; v jsonb;
+begin
+  if not private.is_host(p_room) then raise exception 'not the host' using errcode = '42501'; end if;
+  select (state ->> 'round')::int, state ->> 'phase' into n, ph from public.rooms where id = p_room for update;
+  if n is null then raise exception 'no round' using errcode = 'P0001'; end if;
+  if ph not in ('vote', 'results') then raise exception 'no vote running' using errcode = 'RB004'; end if;
+  update public.rooms set state = state || jsonb_build_object('phase', 'results') where id = p_room;
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'uid', vo.uid, 'name', pe.name, 'hidden', pe.hidden, 'side', vo.side, 'stars', vo.stars)
+           order by pe.name, vo.side), '[]'::jsonb)
+    into v
+    from public.votes vo join public.people pe on pe.room = vo.room and pe.uid = vo.uid
+    where vo.room = p_room and vo.round = n;
+  return jsonb_build_object('round', n, 'votes', v, 'now', now());
+end $$;

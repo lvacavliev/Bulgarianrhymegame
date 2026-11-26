@@ -13,9 +13,9 @@ tests (the checklist at the top of the M10 notes in section 14) and party mode.
 The party is on 2026-12-31.
 **Also scoped (2026-11-26), not built:** party mode, section 16 (QR join, phone voting, live
 reactions, ranking; Supabase; duet + 1v1). Milestones P0–P5 in 16.10, decisions in 16.12.
-P0–P3 done (Supabase `rimoboy`, `party/schema.sql`, `party-net.js`, `party-host.js`,
-`party-battle.js`, `party.html`); next party steps: **P4** (phone page) and **P5** (vote +
-results, section 16.10).
+**P0–P5 done** (Supabase `rimoboy`, `party/schema.sql`, `party-net.js`, `party-host.js`,
+`party-battle.js`, `party-vote.js`, `party.html`). Open: a rehearsal with real phones and
+a TV before 2026-12-20 (section 16.10).
 
 **Read in this order:** this section → section 14 (the checklist, with implementation notes
 under each finished milestone: *the code is the source of truth where they differ from
@@ -1314,7 +1314,7 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
     end.js seeks once past the end, then back to 0.
   - Skipped (optional): extra SoundCloud help text (the REC note covers the limit the player
     meets) and a separate shareable page (the Vercel site exists).
-- [ ] **P0–P5** Party mode: QR join, live reactions, audience vote, ranking (section 16.10; decisions in 16.12). P0–P3 done 2026-11-26 (see 16.10: Supabase `rimoboy`, anonymous sign-ins on, 30/hour/IP kept). Next: P4, P5
+- [x] **P0–P5** Party mode: QR join, live reactions, audience vote, ranking (section 16.10; decisions in 16.12). P0–P5 done 2026-11-26 (see 16.10: Supabase `rimoboy`, anonymous sign-ins on, 30/hour/IP kept). Open: rehearsal with real phones
 
 ---
 
@@ -1391,6 +1391,14 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
   User decisions (16.12): Supabase, both battle formats (duet + 1v1), 1–5 stars, a
   who-rated-whom table, optional rapper names. **Next: M9** (word lists), unchanged; party
   mode starts with P0 (connect the Supabase connector).
+- **2026-11-26, session 11 (P4 + P5):** Phone page rewritten (lobby, rename, between,
+  results, connection pill, vote end handling) and the vote + results on the TV
+  (`js/party-vote.js`, `#partyVote`, history). Agent review fixes: vote/finish guards and a
+  share lock in the DB (no vote after the tally), RB004 errcode, startVote failure handling,
+  countdown fallback, snapshot vs live votes, no endless finish retries, separate result
+  writes bound to their room, exact winner, Space blocked, running votes never dropped,
+  resume in `results`, phone rename/vote-stuck/pill/pop fixes. Committed and pushed.
+  **Party mode P0–P5 is complete.** Open: a real rehearsal with phones and a TV (16.10).
 - **2026-11-26, session 11 (P3):** Battles in the game (`js/party-battle.js`, hooks in
   `game.js`, `#partyFx`). Agent review fixes: the round starts only when the beat plays; turn
   and edge logic no longer depend on seeing one exact cell; failed writes toast and resend;
@@ -1885,10 +1893,57 @@ tests/party-sim.html     ← ?r=CODE&n=30: 30 fake phones (separate clients with
 - *P3 original brief:* duet turns and 1v1 parts, row sides, header texts,
   `state.turn`, reactions layer, hype meter, hype calls. Pass: no lost ball frames with 30
   simulated phones tapping.
-- **P4 phone page:** join, lobby, live tap zones and emoji, between, vote, results, wake
+- **P4 phone page — done 2026-11-26.** `party.html` + `js/party-phone.js` + `css/party.css`
+  rewritten. Views: join (also "Смени името" from the lobby, with "Отказ"; a battle or a vote
+  closes the form), message, lobby ("Чакаме батъла…", own name, last battle's names), live
+  (banner "◀ ИВАН рапира" / "МАРИЯ рапира ▶", the rapping side lit, tap zones with a small
+  emoji pop, counts, 5 emoji), between (1v1: "Следва МАРИЯ ▶", tapping still counts), vote
+  (countdown, stars per side, "✓ Записано…" from what the database has, stars disabled at 0,
+  then "Чакаме резултатите…" with a state poll every 3 s), results (winner, both averages,
+  vote counts, "Ти даде: ★★★★ / ★★★★★ · 🔥 × N"), closed / moved. A yellow "Свързвам…" pill
+  shows while the live channel is down or the last request failed; then the state is polled
+  every 5 s, and a CLOSED channel is made again (supabase-js only rejoins after
+  CHANNEL_ERROR / TIMED_OUT). Sign-in errors explain the per-IP limit ("опитай с мобилни
+  данни"). Wake lock during live; taps max 6/s; reduced motion: no pops.
+- *P4 original brief:* join, lobby, live tap zones and emoji, between, vote, results, wake
   lock, reconnect. Real test: 3 phones (Android + iPhone), on 4G and Wi-Fi, lock and unlock
   during a song.
-- **P5 results:** vote phase with live columns and the live vote feed, the reveal, the
+- **P5 vote + results — done 2026-11-26.** New `js/party-vote.js` (after party-battle.js),
+  `#partyVote` overlay, "История на батълите" in the party overlay.
+  - A finished battle (duet end, or 1v1 part 2 end) saves `rounds.hype`, then
+    `RB.party.startVote(info)` → `start_vote` (20 s, server clock) → overlay "Гласувайте
+    сега!" with a big countdown, two live columns (average ★, "N гласа", bar) and a live feed
+    of the last 8 voters ("Петя  Иван ★★★★☆  Мария ★★★★★", a changed vote moves up and counts
+    once). Focus starts on the title (Space never presses a button); P/T/Space/Esc blocked.
+  - At 0 or "Край на гласуването": `finish_vote` (3 tries; on a lasting error the button
+    becomes "Покажи резултата") → the server's list is the result → winner by exact average
+    (cross-multiplied sums; a tie → more hype; then "Равенство!"; "Няма гласове"), 2 decimals
+    when 1 decimal looks equal, confetti, **"Кой как гласува"** (every voter with the stars
+    for each rapper, sorted by name, auto-scrolls on a TV), "🔥 Топ хайпъри" (top 3 by taps),
+    "👑 Класиране на вечерта" (finished battles, best winner average first). Then
+    `rounds.results = {L:{avg,n,sum}, R:…, winner, hype, topHypers, voters}` and
+    `rooms.state.results = {winner, L:{avg,n}, R:{avg,n}}` (the phones) in two separate
+    writes with one retry each, only for the room the vote belongs to.
+  - "Нов батъл" → `phase = 'lobby'` (through the battle write queue) and the menu; "Затвори"
+    keeps the results on the phones; the menu or the next battle also moves them to lobby.
+    A running vote is never dropped.
+  - Host reload: `vote` → the overlay comes back with the votes so far and the same end time;
+    `results` without a written result → finish again; `live` / `between` (the game is gone)
+    → lobby.
+  - DB (migrations `party_vote_fixes`, `party_vote_errcode`, appended to `party/schema.sql`):
+    `start_vote` only from `live`/`between` and never on a round with results; `finish_vote`
+    only from `vote` (or `results` again); `vote_open` takes a share lock on the room, so
+    `finish_vote` (FOR UPDATE) waits for votes being written and later votes are refused —
+    no vote can land after the tally. Wrong-phase errcode **`RB004`** (not `P0004`: that is
+    ASSERT_FAILURE, which `exception when others` cannot catch — found in the SQL test).
+  - Verified (browser): 8 simulated guests + one phone page; live tally exact (29/7 = 4,1;
+    a changed vote counted once), reveal "ПОБЕДИТЕЛ: МАРИЯ" 4,0 / 4,3 with the phone's vote in
+    it, table of 8 voters (a non-voter is not listed), top hypers, ranking, phone results view,
+    "Нов батъл" → lobby, history, host reload during the vote → resumed, early stop, Space
+    blocked, rename + cancel, between banner; regression sim 23/23; SQL guard tests.
+  - Reviewed by an agent: 16 medium + 4 small findings, all fixed (session log).
+  - **Not tested:** real phones and a TV (deployed now: scan the QR), two hosts racing.
+- *P5 original brief:* vote phase with live columns and the live vote feed, the reveal, the
   who-rated-whom table, top hypers, the session ranking, "История". Then a full party
   rehearsal with real phones before 2026-12-20, so there is time for fixes before 2026-12-31.
 

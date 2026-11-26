@@ -76,3 +76,35 @@ input:focus { outline: 2px solid var(--gold); outline-offset: 2px; }
   color: rgba(255, 255, 255, .25); padding: 0; touch-action: manipulation;
 }
 .stars button.on { color: var(--gold); }
+
+/* ---------- P4 polish ---------- */
+html, body { touch-action: manipulation; }
+.ph-right { display: flex; align-items: center; gap: 8px; }
+.ph-net {
+  font: 800 11px var(--font-b); color: var(--ink); background: var(--gold); padding: 3px 8px; border-radius: 999px;
+  animation: phBlink 1.2s ease-in-out infinite;
+}
+@keyframes phBlink { 50% { opacity: .55; } }
+.ph-err { color: #ff8a80; }
+.ph-ok { color: #7be0a8; }
+.ph-me { font-size: 15px; color: var(--muted); }
+.ph-me b { color: var(--text); }
+.ph-link { background: none; border: 0; color: var(--gold); font: 700 14px var(--font-b); text-decoration: underline; cursor: pointer; padding: 4px; }
+.ph-banner { margin: 0; font: 800 16px var(--font-d); min-height: 1.3em; color: var(--gold); }
+.ph-zone { overflow: hidden; }
+.ph-pop { position: absolute; bottom: 20%; font-size: 34px; pointer-events: none; animation: phPop .7s ease-out forwards; }
+@keyframes phPop { from { transform: translateY(0) scale(.6); opacity: 1; } to { transform: translateY(-120px) scale(1.2); opacity: 0; } }
+.stars button:disabled { opacity: .4; cursor: default; }
+.ph-res { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ph-res-col {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 14px 8px; border-radius: 18px;
+  background: var(--panel); border: 2px solid var(--panel-line);
+}
+.ph-res-col.L { border-color: rgba(79, 140, 255, .5); } .ph-res-col.R { border-color: rgba(255, 90, 79, .5); }
+.ph-res-col .nm { font: 800 15px var(--font-d); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ph-res-col.L .nm { color: var(--side-l); } .ph-res-col.R .nm { color: var(--side-r); }
+.ph-res-col b { font: 800 30px var(--font-d); }
+.ph-res-col small { color: var(--muted); font-weight: 700; }
+.ph-res-col.win { box-shadow: 0 0 0 3px var(--gold), 0 0 26px rgba(255, 201, 74, .4); }
+@media (prefers-reduced-motion: reduce) { .ph-net { animation: none; } }
+#renameCancel { align-self: center; }

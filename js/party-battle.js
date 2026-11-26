@@ -10,7 +10,7 @@
      onStop(G, why)        → leaving a game: a battle that did not finish is cancelled
      onMenu()              → back in the menu: a 1v1 waiting for part 2 is cancelled
    and the reactions layer (#partyFx): side glows, flying emoji, hype meter, hype calls.
-   Results/vote come in P5; for now a finished battle saves its hype and goes back to lobby. */
+   A finished battle saves its hype and starts the vote (js/party-vote.js). */
 (function () {
   'use strict';
   const RB = window.RB;
@@ -67,6 +67,7 @@
       B.lastTurn = null;
     } else {
       pendingPart2 = false;
+      if (P.leaveResults) P.leaveResults(); // the last battle's results leave the phones
       const cfg = P.battle();
       const cycleBars = pattern ? Math.ceil(pattern.dur / 4) : 1;
       const turnBars = cfg.mode === 'duet' ? Math.max(cfg.turnBars, cycleBars) : 0;
@@ -174,7 +175,7 @@
     finish();
   }
 
-  // the battle is complete: save the hype, back to the lobby (P5: the vote starts here)
+  // the battle is complete: save the hype, then the vote
   function finish() {
     const b = B;
     B = null;
@@ -183,12 +184,17 @@
     edges(null);
     setTimeout(() => { if (!B) showFx(false); }, 2500);
     queue(async () => {
-      if (b.round != null) {
-        const by = {};
-        b.by.forEach((v, uid) => { by[uid] = v; });
-        await P.net.saveRound(b.round, { hype: { L: b.tot.L, R: b.tot.R, by } });
-      }
-      await P.net.patchState({ phase: 'lobby', turn: null }); // also when start_round failed
+      if (b.round == null) { await P.net.patchState({ phase: 'lobby', turn: null }); return; } // start_round failed
+      const by = {};
+      b.by.forEach((v, uid) => { by[uid] = v; });
+      await P.net.saveRound(b.round, { hype: { L: b.tot.L, R: b.tot.R, by } });
+      // the vote (js/party-vote.js) runs on its own timer; the queue only starts it
+      if (P.startVote) await P.startVote(b.vote = { round: b.round, mode: b.mode, left: b.left, right: b.right, hype: { L: b.tot.L, R: b.tot.R }, by });
+      else await P.net.patchState({ phase: 'lobby', turn: null });
+    }, () => {
+      // only when the vote never started (startVote sets vote.sent after the RPC); a started
+      // vote belongs to party-vote.js
+      if (!(b.vote && b.vote.sent)) P.net.patchState({ phase: 'lobby', turn: null }).catch(() => {});
     });
     P.afterBattle();
   }
@@ -219,7 +225,10 @@
     // a finished battle: nothing left to do (a restart starts a new battle)
   }
 
-  function onMenu() { if (pendingPart2 || (B && !RB.game.state)) cancel(); }
+  function onMenu() {
+    if (pendingPart2 || (B && !RB.game.state)) cancel();
+    if (P.leaveResults && P.voteState && P.voteState.done) P.leaveResults(); // results → lobby
+  }
 
   // "Нова стая" / "Край на партито" during a battle: the battle is gone (the game keeps playing)
   P.onRoomGone = () => {
@@ -391,6 +400,7 @@
     meter();
   };
 
-  Object.assign(P, { beginGame, decorate, onStarted, onCell, header, onEnd, onStop, onMenu, sideOf });
+  // queueWrite: party-vote.js sends its lobby patch through the same queue (order with start_round)
+  Object.assign(P, { beginGame, decorate, onStarted, onCell, header, onEnd, onStop, onMenu, sideOf, queueWrite: queue });
   Object.defineProperty(P, 'battleState', { get: () => B }); // tests / debugging
 })();
