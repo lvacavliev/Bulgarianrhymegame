@@ -188,6 +188,7 @@
     const b = $('#partyBtn');
     b.classList.toggle('on', P.on);
     b.setAttribute('aria-pressed', String(P.on));
+    if (!P.on) b.classList.remove('live');
     $('#partyStrip').classList.toggle('hidden', !P.on);
     $('#partyMini').classList.toggle('hidden', !P.on || !!ss.get('rb_partyMiniOff'));
   }
@@ -244,6 +245,8 @@
     const n = activeCount();
     $('#poCount').textContent = `Влезли: ${n}`;
     $('#psCount').textContent = n ? `${n} влезли` : '';
+    // guests are in: the 🎉 button steps back to a small emoji-only pill
+    $('#partyBtn').classList.toggle('live', P.on && n > 0);
   }
 
   async function toggleHidden(p) {
