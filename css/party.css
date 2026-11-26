@@ -1,0 +1,78 @@
+/* Rimoboy party mode: phone page (party.html). Same tokens as css/style.css (section 6). */
+:root {
+  --bg-0: #07061a; --bg-1: #120f33; --bg-2: #1c1850;
+  --panel: rgba(255, 255, 255, .05); --panel-line: rgba(255, 255, 255, .09);
+  --text: #f4f1ff; --muted: #a29fc7; --gold: #ffc94a; --gold-2: #ff9f1c; --ink: #1a1030;
+  --side-l: #4f8cff; --side-r: #ff5a4f;   /* left / right rapper (not rhyme colours) */
+  --font-d: "Unbounded", system-ui, "Segoe UI", sans-serif;
+  --font-b: "Manrope", system-ui, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: radial-gradient(900px 600px at 50% -10%, var(--bg-2), var(--bg-1) 45%, var(--bg-0) 100%) fixed, var(--bg-0);
+  color: var(--text); font-family: var(--font-b); font-size: 16px;
+  display: flex; flex-direction: column; min-height: 100dvh; overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+}
+[hidden] { display: none !important; }
+
+.ph-top { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; }
+.ph-brand { font-family: var(--font-d); font-weight: 800; letter-spacing: .02em; color: var(--gold); }
+.ph-brand b { color: #fff4d6; font-weight: 800; }
+.ph-brand i { font-style: normal; color: var(--gold); }
+.ph-code { font-family: var(--font-d); font-size: 13px; color: var(--muted); letter-spacing: .12em; }
+
+main { flex: 1; display: flex; flex-direction: column; padding: 0 16px 16px; }
+.ph-view { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 16px; text-align: center; }
+h1 { font-family: var(--font-d); font-weight: 800; font-size: 24px; margin: 0; }
+.ph-big { font-family: var(--font-d); font-weight: 800; font-size: 22px; margin: 0; line-height: 1.3; }
+.ph-note { color: var(--muted); margin: 0; min-height: 1.2em; font-size: 14px; }
+.ph-count { font-family: var(--font-d); font-weight: 800; font-size: 40px; color: var(--gold); margin: 0; }
+
+form { display: flex; flex-direction: column; gap: 12px; }
+input {
+  font: 600 20px var(--font-b); color: var(--text); text-align: center;
+  background: var(--panel); border: 1px solid var(--panel-line); border-radius: 16px; padding: 16px;
+  user-select: text; -webkit-user-select: text;
+}
+input:focus { outline: 2px solid var(--gold); outline-offset: 2px; }
+.ph-btn {
+  font: 800 18px var(--font-d); color: var(--ink); border: 0; border-radius: 999px; height: 56px;
+  background: linear-gradient(180deg, var(--gold), var(--gold-2)); cursor: pointer;
+}
+.ph-btn:disabled { opacity: .5; }
+
+/* live */
+.ph-live { justify-content: stretch; gap: 12px; }
+.ph-zones { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 55dvh; }
+.ph-zone {
+  position: relative; border: 0; border-radius: 22px; color: #fff; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  font-family: var(--font-d); touch-action: manipulation; transition: transform 80ms, box-shadow 200ms;
+}
+.ph-zone.L { background: linear-gradient(180deg, var(--side-l), color-mix(in srgb, var(--side-l) 55%, #000)); }
+.ph-zone.R { background: linear-gradient(180deg, var(--side-r), color-mix(in srgb, var(--side-r) 55%, #000)); }
+.ph-zone.on { box-shadow: 0 0 0 4px var(--gold), 0 0 28px var(--gold-2); }
+.ph-zone:active, .ph-zone.hit { transform: scale(.96); }
+.ph-zone .nm { font-weight: 800; font-size: 18px; max-width: 90%; overflow: hidden; text-overflow: ellipsis; }
+.ph-zone .hint { font: 600 13px var(--font-b); opacity: .8; }
+.ph-zone .cnt { font-weight: 800; font-size: 34px; }
+.ph-emoji { display: flex; justify-content: center; gap: 8px; }
+.ph-emoji button {
+  font-size: 28px; width: 54px; height: 54px; border-radius: 16px; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--panel-line);
+}
+.ph-emoji button[aria-checked="true"] { border-color: var(--gold); background: rgba(255, 201, 74, .18); }
+
+/* vote */
+.ph-rate { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 18px; background: var(--panel); }
+.ph-rate.L { border-left: 6px solid var(--side-l); }
+.ph-rate.R { border-left: 6px solid var(--side-r); }
+.ph-rate .nm { font-family: var(--font-d); font-weight: 800; }
+.stars { display: flex; justify-content: center; gap: 6px; }
+.stars button {
+  font-size: 34px; width: 52px; height: 52px; border: 0; background: none; cursor: pointer;
+  color: rgba(255, 255, 255, .25); padding: 0; touch-action: manipulation;
+}
+.stars button.on { color: var(--gold); }

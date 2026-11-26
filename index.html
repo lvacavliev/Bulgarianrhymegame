@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/party-host.css">
 </head>
 <body>
 <div class="stars" id="stars" aria-hidden="true"></div>
@@ -15,6 +16,7 @@
 <header class="topbar">
   <button class="brand" id="brandBtn" aria-label="Към менюто"><span class="spark">✦</span><span class="b1">РИМО</span><span class="b2">БОЙ</span></button>
   <div class="top-actions">
+    <button id="partyBtn" class="icon-btn" aria-label="Парти режим" title="Парти режим: гласуване от телефони" aria-pressed="false">🎉</button>
     <button id="tvBtn" class="icon-btn" aria-label="TV режим" title="TV режим (големи клетки)" aria-pressed="false">📺</button>
     <button id="helpBtn" class="icon-btn" aria-label="Как се играе" title="Как се играе">?</button>
     <button id="fsBtn" class="icon-btn" aria-label="Цял екран" title="Цял екран">⛶</button>
@@ -23,6 +25,30 @@
 
 <!-- ================= MENU ================= -->
 <main id="menu" class="screen active">
+  <!-- party strip (BUILD.md 16.5): shown only while party mode is on -->
+  <section id="partyStrip" class="party-strip hidden" aria-label="Парти батъл">
+    <button id="psRoom" class="ps-room" aria-label="Покажи QR кода"><span class="ps-tag">🎉 ПАРТИ</span><b id="psCode"></b><span id="psCount" class="ps-count"></span></button>
+    <div class="ps-group">
+      <span class="ps-label">Формат</span>
+      <div class="chips" id="psMode">
+        <button class="chip" data-mode="duet">Дует</button>
+        <button class="chip" data-mode="1v1">1 на 1</button>
+      </div>
+    </div>
+    <div class="ps-group" id="psTurnBox">
+      <span class="ps-label">Смяна на всеки</span>
+      <div class="chips" id="psTurn">
+        <button class="chip" data-bars="4">4 бара</button>
+        <button class="chip" data-bars="8">8 бара</button>
+      </div>
+    </div>
+    <div class="ps-group ps-names">
+      <span class="ps-label">Рапъри</span>
+      <input id="psLeft" class="ps-input L" maxlength="24" placeholder="Играч 1 (ляво)" aria-label="Име на рапъра вляво">
+      <input id="psRight" class="ps-input R" maxlength="24" placeholder="Играч 2 (дясно)" aria-label="Име на рапъра вдясно">
+      <label class="ps-same"><input type="checkbox" id="psSame"> Същите рапъри</label>
+    </div>
+  </section>
   <div class="menu-grid">
     <section class="panel" id="beatPanel">
       <h2 class="step">1 · Избери бийт</h2>
@@ -233,6 +259,42 @@
   </div>
 </div>
 
+<!-- party mode (BUILD.md 16.5): big QR overlay + mini QR in the corner -->
+<div id="partyOv" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="poTitle">
+  <div class="dialog party-dialog">
+    <button class="icon-btn x" id="poClose" aria-label="Затвори">✕</button>
+    <h2 id="poTitle">Сканирай и гласувай!</h2>
+    <div class="po-body">
+      <div class="po-qr" id="poQr" aria-hidden="true"></div>
+      <div class="po-side">
+        <p class="po-url" id="poUrl"></p>
+        <p class="po-code"><span>код</span><b id="poCode"></b></p>
+        <p class="po-count" id="poCount">Влезли: 0</p>
+        <p class="po-hint">Тапни име, за да го скриеш от екрана.</p>
+        <div class="po-people" id="poPeople"></div>
+        <p class="po-status" id="poStatus" role="status"></p>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn-primary" id="poOk">Затвори</button>
+      <button class="btn-ghost" id="poNew">Нова стая</button>
+      <button class="btn-ghost" id="poEnd">Край на партито</button>
+    </div>
+  </div>
+</div>
+<!-- party battle effects (BUILD.md 16.5): side glows, flying reactions, hype meter, hype calls -->
+<div id="partyFx" class="party-fx hidden" aria-hidden="true">
+  <div class="pfx-edge L" id="pfxEdgeL"></div><div class="pfx-edge R" id="pfxEdgeR"></div>
+  <div class="pfx-zone L" id="pfxZoneL"></div><div class="pfx-zone R" id="pfxZoneR"></div>
+  <div class="pfx-burst L" id="pfxBurstL"></div><div class="pfx-burst R" id="pfxBurstR"></div>
+  <div class="pfx-call L" id="pfxCallL"></div><div class="pfx-call R" id="pfxCallR"></div>
+  <div class="pfx-meter"><span class="pfx-name L" id="pfxNameL"></span><div class="pfx-bar"><i id="pfxBarL"></i></div><span class="pfx-name R" id="pfxNameR"></span></div>
+</div>
+<div id="partyMini" class="party-mini hidden">
+  <button id="pmOpen" class="pm-open" aria-label="Покажи QR кода на партито"><span class="pm-qr" id="pmQr" aria-hidden="true"></span><b id="pmCode"></b></button>
+  <button id="pmHide" class="pm-hide" aria-label="Скрий малкия QR код">✕</button>
+</div>
+
 <div id="toast" class="toast hidden" role="status"></div>
 <canvas id="confetti" class="hidden"></canvas>
 
@@ -259,5 +321,10 @@
 <script src="js/game.js"></script>
 <script src="js/end.js"></script>
 <script src="js/tutorial.js"></script>
+<!-- party mode: supabase-js and the QR library are loaded on demand by party-host.js -->
+<script src="js/party-config.js"></script>
+<script src="js/party-net.js"></script>
+<script src="js/party-host.js"></script>
+<script src="js/party-battle.js"></script>
 </body>
 </html>

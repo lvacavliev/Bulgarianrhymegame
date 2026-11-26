@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Party sim (P1)</title>
+<style>
+  body { font: 14px system-ui, sans-serif; background: #111; color: #eee; padding: 16px; }
+  table { border-collapse: collapse; margin: 12px 0; }
+  td { padding: 3px 10px; border-bottom: 1px solid #333; vertical-align: top; }
+  .ok { color: #5d5; } .bad { color: #f66; }
+  pre { white-space: pre-wrap; color: #aaa; font-size: 12px; }
+  button { font: inherit; padding: 6px 14px; }
+</style>
+</head>
+<body>
+<h1>Party mode transport test (BUILD.md 16.10, P1)</h1>
+<p>Simulates one host + <b id="nShow"></b> phones in room A, and a host + 1 phone in room B.
+URL options: <code>?n=20</code> (phones), <code>?tap=10</code> (seconds of tapping), <code>?auto</code> (start at once).
+Anonymous sign-ins are limited to 30 per hour per IP; the sessions are kept per slot, so re-runs reuse the same users.</p>
+<p><button id="run">Run test</button> <span id="status"></span></p>
+<table id="res"></table>
+<pre id="log"></pre>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/dist/umd/supabase.js" integrity="sha384-A97u3Qnt9GZHURO9YJZRe7VQgGUeFzcv6I1oIGnUTxQrCxnpQMwR0/G8F2zt9abZ" crossorigin="anonymous"></script>
+<script src="../js/party-config.js"></script>
+<script src="../js/party-net.js"></script>
+<script>
+(function () {
+  'use strict';
+  const q = new URLSearchParams(location.search);
+  const N = Math.max(1, Math.min(28, +(q.get('n') || 20)));
+  const TAP_SEC = Math.max(3, +(q.get('tap') || 10));
+  const $ = (s) => document.querySelector(s);
+  $('#nShow').textContent = N;
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const sorted = (a) => [...a].filter((x) => !isNaN(x)).sort((x, y) => x - y);
+  const pct = (a, p) => { const s = sorted(a); return s.length ? s[Math.min(s.length - 1, Math.floor(p * s.length))] : NaN; };
+  const median = (a) => pct(a, 0.5);
+  async function waitFor(fn, ms, step = 100) {
+    const t = Date.now();
+    while (Date.now() - t < ms) { if (fn()) return true; await sleep(step); }
+    return !!fn();
+  }
+  const log = (...a) => { $('#log').textContent += a.join(' ') + '\n'; };
+  const results = [];
+  function check(name, ok, detail = '') {
+    results.push({ name, ok: !!ok, detail });
+    $('#res').innerHTML = results.map((r) =>
+      `<tr><td class="${r.ok ? 'ok' : 'bad'}">${r.ok ? 'PASS' : 'FAIL'}</td><td>${r.name}</td><td>${r.detail}</td></tr>`).join('');
+  }
+  window.SIM = { results, done: false, error: null };
+
+  function hostFeed(code, uids) {
+    const F = { people: new Map(), votes: [], updates: 0, reactions: [], lat: [], foreign: 0, last: new Map(), status: {}, voteLat: [] };
+    F.handlers = {
+      onPeople: (row) => { if (row.room !== code) F.foreign++; F.people.set(row.uid, row); },
+      onVote: (row, type) => {
+        if (row.room !== code) F.foreign++;
+        if (type === 'UPDATE') F.updates++; else F.votes.push(row);
+        const sent = voteSentAt.get(row.uid + row.side);
+        if (sent) F.voteLat.push(Date.now() - sent);
+      },
+      onReaction: (p) => {
+        if (uids && !uids.has(p.uid)) F.foreign++;
+        F.reactions.push(p); F.lat.push(Date.now() - p.at); F.last.set(p.uid, p);
+      },
+      onStatus: (k, s) => { F.status[k] = s; },
+    };
+    return F;
+  }
+  const voteSentAt = new Map();
+
+  async function run() {
+    $('#run').disabled = true;
+    const status = (s) => { $('#status').textContent = s; log(s); };
+
+    // ---- host A ----
+    status('host A: sign in + room');
+    const hostA = new RBNet.PartyNet({ storageKey: 'rb-sim-hostA' });
+    await hostA.signIn();
+    const codeA = await hostA.createRoom();
+    log('room A =', codeA, ' join URL:', RBNet.joinUrl(codeA));
+    const uidsA = new Set();
+    const A = hostFeed(codeA, uidsA);
+    hostA.hostListen(A.handlers);
+    check('host A listens (db + broadcast)', await waitFor(() => A.status.db === 'SUBSCRIBED' && A.status.up === 'SUBSCRIBED', 15000), JSON.stringify(A.status));
+
+    // ---- room B ----
+    status('room B: host + 1 phone');
+    const hostB = new RBNet.PartyNet({ storageKey: 'rb-sim-hostB' });
+    await hostB.signIn();
+    const codeB = await hostB.createRoom();
+    const phoneB = new RBNet.PartyNet({ storageKey: 'rb-sim-pB' });
+    await phoneB.signIn();
+    const B = hostFeed(codeB, new Set([phoneB.uid]));
+    hostB.hostListen(B.handlers);
+    await waitFor(() => B.status.db === 'SUBSCRIBED' && B.status.up === 'SUBSCRIBED', 15000);
+    await phoneB.join(codeB, 'Стая Б');
+    log('room B =', codeB);
+
+    // ---- phones ----
+    status(`signing in ${N} phones`);
+    const phones = [];
+    for (let i = 0; i < N; i++) {
+      const p = new RBNet.PartyNet({ storageKey: 'rb-sim-p' + i });
+      try { await p.signIn(); } catch (e) { log('sign-in', i, 'failed:', e.code, e.message); break; }
+      phones.push(p); uidsA.add(p.uid);
+    }
+    check(`${N} phones signed in anonymously`, phones.length === N, `${phones.length}/${N}`);
+    if (!phones.length) throw new Error('no phones');
+
+    status('phones join room A');
+    const tJoin = Date.now();
+    await Promise.all(phones.map((p, i) => p.join(codeA, 'Тест ' + (i + 1))));
+    const joinMs = Date.now() - tJoin;
+    phones.forEach((p) => {
+      p.got = []; p.sub = '';
+      p.watchRoom({ onState: (st) => p.got.push({ st, t: Date.now() }), onStatus: (s) => { p.sub = s; } });
+    });
+    const subOk = await waitFor(() => phones.every((p) => p.sub === 'SUBSCRIBED'), 20000);
+    check('all phones watch the room state', subOk, `${phones.filter((p) => p.sub === 'SUBSCRIBED').length}/${phones.length}`);
+    const seen = await waitFor(() => A.people.size >= phones.length, 10000);
+    check('host sees every guest join live', seen, `${A.people.size}/${phones.length}, all joins took ${joinMs} ms`);
+    const topics = phones.flatMap((p) => p.sb.getChannels().map((c) => c.topic));
+    check('phones are not subscribed to the reaction channel', topics.every((t) => !t.includes('rb-up-')), [...new Set(topics.map((t) => t.replace(codeA, 'CODE')))].join(', '));
+
+    // ---- round ----
+    status('host starts round');
+    const tStart = Date.now();
+    const round = await hostA.startRound('duet', 'Играч 1', 'Играч 2');
+    const live = await waitFor(() => phones.every((p) => p.state && p.state.phase === 'live'), 10000);
+    const stLat = phones.map((p) => { const g = p.got.find((x) => x.st.phase === 'live'); return g ? g.t - tStart : NaN; });
+    check('state "live" reaches every phone', live, `round ${round}; median ${median(stLat)} ms, max ${pct(stLat, 1)} ms (includes the RPC)`);
+
+    // the round exists, the vote is not open yet: the vote-window policy must refuse it
+    try { await phones[0].vote(round, 'L', 5); check('vote during the song (before the vote opens) is refused', false); }
+    catch (e) { check('vote during the song (before the vote opens) is refused', e.code === '42501', e.code); }
+
+    // ---- taps ----
+    status(`tapping for ${TAP_SEC} s`);
+    const tot = phones.map(() => ({ L: 0, R: 0 }));
+    let sent = 0, sendErr = 0, sentB = 0;
+    const timers = phones.map((p, i) => setInterval(() => {
+      if (Math.random() > 0.85) return;
+      const nL = Math.random() < 0.5 ? 1 + Math.floor(Math.random() * 4) : 0;
+      const nR = nL ? 0 : 1 + Math.floor(Math.random() * 4);
+      tot[i].L += nL; tot[i].R += nR; sent++;
+      p.sendUp({ uid: p.uid, e: '🔥', nL, nR, totL: tot[i].L, totR: tot[i].R, round, at: Date.now() }).then((r) => { if (r && r.success === false) sendErr++; }).catch(() => sendErr++);
+    }, RBNet.SEND_MS + Math.random() * 40));
+    const timerB = setInterval(() => { sentB++; phoneB.sendUp({ uid: phoneB.uid, e: '😂', nL: 1, nR: 0, totL: sentB, totR: 0, round: 1, at: Date.now() }); }, RBNet.SEND_MS);
+    const tTap = Date.now();
+    await sleep(TAP_SEC * 1000);
+    timers.forEach(clearInterval); clearInterval(timerB);
+    const tapSec = (Date.now() - tTap) / 1000;
+    await sleep(2500);
+    check('every reaction batch reaches the host', A.reactions.length >= sent * 0.99 && sendErr === 0, `${A.reactions.length}/${sent} received, ${sendErr} send errors`);
+    check('tap → host latency median under 300 ms', median(A.lat) < 300, `median ${median(A.lat)} ms, p95 ${pct(A.lat, 0.95)} ms, max ${pct(A.lat, 1)} ms`);
+    const rate = (sent * 2) / tapSec;
+    check('realtime events under the free limit (100/s)', rate < 100, `≈${rate.toFixed(0)} events/s (sent + delivered) with ${phones.length} phones tapping non-stop`);
+    const totOk = phones.every((p, i) => { const l = A.last.get(p.uid); return !l || (l.totL === tot[i].L && l.totR === tot[i].R); });
+    check('host hype totals equal the phone totals', totOk);
+    check('rooms are isolated', A.foreign === 0 && B.foreign === 0 && B.reactions.length > 0 && B.people.size === 1,
+      `A foreign ${A.foreign}, B foreign ${B.foreign}, B got ${B.reactions.length}/${sentB} of its own reactions, B people ${B.people.size}`);
+
+    // forged reactions: a guest of room B, and a caller with only the public key (no sign-in),
+    // on the private and on the public topic of room A. None may reach host A.
+    status('forged reactions');
+    const forged = [];
+    try { await phoneB.sb.channel('rb-up-' + codeA, { config: { private: true } }).httpSend('r', { uid: 'forged-guestB', nL: 99, nR: 0, at: Date.now() }); forged.push('guestB-private: accepted'); }
+    catch (e) { forged.push('guestB-private: refused'); }
+    for (const priv of [true, false]) {
+      const r = await fetch(`${RB_PARTY.url}/realtime/v1/api/broadcast`, {
+        method: 'POST', headers: { apikey: RB_PARTY.key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ topic: 'rb-up-' + codeA, event: 'r', private: priv, payload: { uid: 'forged-anon', nL: 99, nR: 0, at: Date.now() } }] }),
+      });
+      forged.push(`anon-${priv ? 'private' : 'public'}: HTTP ${r.status}`);
+    }
+    await sleep(2500);
+    const forgedIn = A.reactions.filter((p) => String(p.uid).startsWith('forged')).length;
+    check('forged reactions never reach the host', forgedIn === 0 && A.foreign === 0, `${forged.join(', ')}; host got ${forgedIn} forged`);
+
+    // turn change
+    const tTurn = Date.now();
+    await hostA.patchState({ turn: 'R' });
+    const turnOk = await waitFor(() => phones.every((p) => p.state.turn === 'R'), 8000);
+    const turnLat = phones.map((p) => { const g = p.got.find((x) => x.st.turn === 'R'); return g ? g.t - tTurn : NaN; });
+    check('turn change reaches every phone', turnOk, `median ${median(turnLat)} ms, max ${pct(turnLat, 1)} ms`);
+
+    // ---- vote ----
+    status('vote');
+    const v = await hostA.startVote(10);
+    const inVote = await waitFor(() => phones.every((p) => p.state.phase === 'vote'), 8000);
+    check('state "vote" reaches every phone', inVote, `ends ${v.voteEndsAt}`);
+    await Promise.all(phones.map(async (p) => {
+      for (const side of ['L', 'R']) {
+        voteSentAt.set(p.uid + side, Date.now());
+        await p.vote(round, side, 1 + Math.floor(Math.random() * 5));
+      }
+    }));
+    const allVotes = await waitFor(() => A.votes.length >= phones.length * 2, 8000);
+    check('host gets every vote live', allVotes, `${A.votes.length}/${phones.length * 2}; median ${median(A.voteLat)} ms, max ${pct(A.voteLat, 1)} ms (write + Postgres Changes)`);
+
+    const upd0 = A.updates;
+    await phones[0].vote(round, 'L', 1);
+    const updOk = await waitFor(() => A.updates > upd0, 5000);
+    const rows = await hostA.votes(round);
+    const mine = rows.find((r) => r.uid === phones[0].uid && r.side === 'L');
+    check('a changed vote updates its row (no duplicate)', updOk && mine && mine.stars === 1 && rows.length === phones.length * 2, `${rows.length} rows`);
+
+    const stranger = await phoneB.sb.from('votes').upsert({ room: codeA, round, uid: phoneB.uid, side: 'L', stars: 5 });
+    check('a guest of another room cannot vote here', !!stranger.error, stranger.error && stranger.error.code);
+    const peek = await phoneB.sb.from('rooms').select('id').eq('id', codeA);
+    const peekP = await phoneB.sb.from('people').select('uid').eq('room', codeA);
+    check('a guest of another room cannot read this room', !peek.error && peek.data.length === 0 && peekP.data.length === 0);
+
+    status('waiting for the vote to close');
+    const endsAt = Date.parse(v.voteEndsAt);
+    await sleep(Math.max(0, endsAt - hostA.now()) + 2600);
+    try { await phones[1].vote(round, 'R', 5); check('a vote after the end is refused', false); }
+    catch (e) { check('a vote after the end is refused', true, e.code); }
+    const fin = await hostA.finishVote();
+    const named = fin.votes.every((v) => v.name && (v.side === 'L' || v.side === 'R'));
+    check('finish_vote returns every vote with names (who rated whom)', fin.votes.length === phones.length * 2 && named && hostA.state.phase === 'results',
+      `${fin.votes.length} votes, phase ${hostA.state.phase}, e.g. ${fin.votes[0] && fin.votes[0].name + ' ' + fin.votes[0].side + ' ★' + fin.votes[0].stars}`);
+
+    // ---- reloads ----
+    status('reload host + phone');
+    const hostA2 = new RBNet.PartyNet({ storageKey: 'rb-sim-hostA' });
+    await hostA2.signIn();
+    const room = await hostA2.loadRoom(codeA);
+    check('host reload keeps the room', room && hostA2.uid === hostA.uid && room.state.round === round && room.state.phase === 'results', room ? JSON.stringify(room.state).slice(0, 120) : 'no room');
+    const p0b = new RBNet.PartyNet({ storageKey: 'rb-sim-p0' });
+    await p0b.signIn();
+    const st = await p0b.join(codeA, 'Тест 1');
+    check('phone reload keeps the same guest and phase', p0b.uid === phones[0].uid && st.phase === 'results' && A.people.size === phones.length, `phase ${st.phase}, people ${A.people.size}`);
+
+    // ---- clean up ----
+    await hostA.patchState({ phase: 'closed' });
+    await hostB.patchState({ phase: 'closed' });
+    for (const n of [hostA, hostA2, hostB, phoneB, p0b, ...phones]) await n.close();
+    status(`done: ${results.filter((r) => r.ok).length}/${results.length} PASS (rooms ${codeA}, ${codeB})`);
+    window.SIM.rooms = [codeA, codeB];
+  }
+
+  $('#run').addEventListener('click', () => run().catch((e) => { window.SIM.error = e.message; log('ERROR', e.code || '', e.message); }).finally(() => { window.SIM.done = true; }));
+  if (q.has('auto')) $('#run').click();
+})();
+</script>
+</body>
+</html>

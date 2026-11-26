@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07061a">
+<title>Римобой · Парти</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/party.css">
+</head>
+<body>
+<header class="ph-top">
+  <div class="ph-brand">✦ <b>РИМО</b><i>БОЙ</i></div>
+  <div class="ph-code" id="pCode"></div>
+</header>
+
+<main id="pMain">
+  <!-- join -->
+  <section class="ph-view" id="vJoin" hidden>
+    <h1>Как се казваш?</h1>
+    <form id="joinForm" autocomplete="off">
+      <input id="joinName" maxlength="16" placeholder="Името ти" aria-label="Името ти" required>
+      <button class="ph-btn" type="submit" id="joinBtn">Влизам</button>
+    </form>
+    <p class="ph-note" id="joinErr" role="alert"></p>
+  </section>
+
+  <!-- message (loading, lobby, between, closed, errors) -->
+  <section class="ph-view" id="vMsg" hidden>
+    <p class="ph-big" id="msgText">Зарежда…</p>
+    <p class="ph-note" id="msgSub"></p>
+  </section>
+
+  <!-- live: two tap zones -->
+  <section class="ph-view ph-live" id="vLive" hidden>
+    <div class="ph-zones">
+      <button class="ph-zone L" id="zoneL" aria-label="Хайп за лявия рапър"><span class="nm" id="nameL">Играч 1</span><span class="hint">ляво</span><span class="cnt" id="cntL">0</span></button>
+      <button class="ph-zone R" id="zoneR" aria-label="Хайп за десния рапър"><span class="nm" id="nameR">Играч 2</span><span class="hint">дясно</span><span class="cnt" id="cntR">0</span></button>
+    </div>
+    <div class="ph-emoji" id="emojiRow" role="radiogroup" aria-label="Реакция"></div>
+  </section>
+
+  <!-- vote -->
+  <section class="ph-view" id="vVote" hidden>
+    <h1>Оцени рапърите</h1>
+    <p class="ph-count" id="voteLeft"></p>
+    <div class="ph-rate L"><span class="nm" id="vNameL">Играч 1</span><div class="stars" data-side="L"></div></div>
+    <div class="ph-rate R"><span class="nm" id="vNameR">Играч 2</span><div class="stars" data-side="R"></div></div>
+    <p class="ph-note">Името и оценката ти се виждат на екрана.</p>
+    <p class="ph-note" id="voteErr" role="alert"></p>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/dist/umd/supabase.js" integrity="sha384-A97u3Qnt9GZHURO9YJZRe7VQgGUeFzcv6I1oIGnUTxQrCxnpQMwR0/G8F2zt9abZ" crossorigin="anonymous"></script>
+<script src="js/party-config.js"></script>
+<script src="js/party-net.js"></script>
+<script src="js/party-phone.js"></script>
+</body>
+</html>

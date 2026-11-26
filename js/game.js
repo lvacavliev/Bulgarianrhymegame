@@ -90,6 +90,7 @@
   }
 
   function onCell(idx) {
+    if (G.party) window.RB.party.onCell(G, idx); // party battle: turns (party-host.js)
     if (G.litEl) G.litEl.classList.remove('lit');
     G.litEl = null;
     if (idx < 0) return;
@@ -102,6 +103,8 @@
   function header(idx) {
     if (G.paused) return;
     const stall = G.engine && G.engine.isSC && G.engine.stalled && G.engine.stalled();
+    const ph = G.party && window.RB.party.header(G, idx, stall); // party battle: whose turn
+    if (ph) { setHead(ph[0], ph[1]); return; }
     if (idx < COUNT_CELLS) {
       setHead('Пригответе се!', stall ? 'Зарежда…' : (idx < 0 ? (G.beat.src === 'sc' && idx < -1 ? 'Слушай интрото…' : '') : `Започваме след ${COUNT_CELLS - idx}`));
     } else {
@@ -172,7 +175,7 @@
 
   async function startGame() {
     if (window.RB.end) window.RB.end.cleanup(); // end-screen popups/confetti
-    stopEngine(0.05); // short fade: "Играй пак" must not overlap two beats
+    stopEngine(0.05, 'restart'); // short fade: "Играй пак" must not overlap two beats
     window.RB.beats.stopPreview();
     window.RB.rec.revoke(); // the last recording's blob URL
     const my = ++token;
@@ -204,9 +207,12 @@
       paused: false, ended: false, starting: true, head1: null, head2: null,
       sub: S.blank ? 'Празна игра' : `${list.emoji} ${list.name}`,
     };
+    // party mode: this game is a battle (or its second part); null otherwise
+    G.party = window.RB.party && window.RB.party.on ? window.RB.party.beginGame(G, window.RB.settings.pattern()) : null;
 
     showScreen('game');
     Chart.renderRows(rowsEl, chart, { countinRows: COUNTIN_BARS });
+    if (G.party) window.RB.party.decorate(rowsEl, G);
     G.cells = Array.from(rowsEl.querySelectorAll('.cell'));
     fillPlayer(beat, S);
     $('#gDur').textContent = fmt(Math.round(G.playSec)); // same rounding as the end screen
@@ -257,6 +263,7 @@
     }
     if (my !== token || !G || G.engine !== engine) { engine.stop(0); return; }
     G.starting = false;
+    if (G.party) window.RB.party.onStarted(G); // the battle goes live only once the beat really plays
     if (G.rec && engine.isSC) startRec(); // SoundCloud: once the track really plays
     G.raf = requestAnimationFrame(loop);
     if (G.pendingPause || document.hidden) { G.pendingPause = false; pause(); }
@@ -298,9 +305,11 @@
     G.raf = requestAnimationFrame(loop);
   }
 
-  function stopEngine(fade = 0.2) {
+  // why: 'restart' (a new game follows) or 'menu'
+  function stopEngine(fade = 0.2, why = 'menu') {
     if (!G) return;
     cancelAnimationFrame(G.raf);
+    if (G.party && window.RB.party) window.RB.party.onStop(G, why);
     // exit mid-game (also during the mic prompt): no recording, mic released
     if (!G.ended) window.RB.rec.discard();
     if (G.engine) G.engine.stop(fade);
@@ -313,6 +322,7 @@
     token++;
     if (window.RB.end) window.RB.end.cleanup();
     stopEngine();
+    if (window.RB.party && window.RB.party.onMenu) window.RB.party.onMenu(); // also when no game was left to stop
     $('#recBadge').classList.add('hidden');
     $('#pauseOv').classList.add('hidden');
     showScreen('menu');
@@ -338,6 +348,7 @@
     $('#recBadge').classList.add('hidden');
     showScreen('end');
     if (window.RB.onGameEnd) window.RB.onGameEnd(G);
+    if (G.party && window.RB.party) window.RB.party.onEnd(G);
   }
 
   // ---------- events ----------

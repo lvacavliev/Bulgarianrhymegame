@@ -1,0 +1,184 @@
+/* Rimoboy party mode: host side in index.html (BUILD.md 16.5). Uses the tokens of style.css. */
+:root { --side-l: #4f8cff; --side-r: #ff5a4f; }
+
+#partyBtn.on { border-color: var(--gold); background: rgba(255, 201, 74, .16); }
+
+/* ---------- party strip (menu) ---------- */
+.party-strip {
+  max-width: 1180px; margin: 0 auto 14px; padding: 12px 16px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px;
+  background: linear-gradient(90deg, rgba(79, 140, 255, .12), rgba(255, 90, 79, .12));
+  border: 1px solid var(--panel-line); border-radius: 22px;
+  width: calc(100% - 40px);
+}
+.ps-room {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 14px;
+  background: var(--panel); border: 1px solid var(--panel-line);
+}
+.ps-room:hover { background: var(--panel-2); }
+.ps-tag { font-weight: 800; font-size: 12px; letter-spacing: 1px; color: var(--gold); }
+.ps-room b { font-family: var(--font-d); letter-spacing: 2px; }
+.ps-count { color: var(--muted); font-size: 12px; font-weight: 800; }
+.ps-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ps-label { font-size: 11px; letter-spacing: 1.2px; color: var(--muted); font-weight: 800; text-transform: uppercase; }
+.ps-names { flex: 1 1 360px; }
+.ps-input {
+  flex: 1 1 130px; min-width: 0; height: 40px; padding: 0 12px; border-radius: 12px;
+  font: 600 14px var(--font-b); color: var(--text); background: var(--panel); border: 1px solid var(--panel-line);
+}
+.ps-input.L { border-left: 4px solid var(--side-l); }
+.ps-input.R { border-left: 4px solid var(--side-r); }
+.ps-input::placeholder { color: var(--muted); }
+.ps-same { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.ps-same input { width: 18px; height: 18px; accent-color: var(--gold); }
+
+@media (max-width: 520px) {
+  .party-strip { width: calc(100% - 32px); padding: 12px; gap: 10px; }
+  .ps-names .ps-label { width: 100%; }
+  .ps-input { flex: 1 1 40%; }
+}
+/* the 🎉 button makes 4 top-bar buttons: keep the brand clear of them on a phone */
+@media (max-width: 420px) {
+  .top-actions { gap: 6px; }
+  .top-actions .icon-btn { width: 36px; height: 36px; font-size: 16px; }
+  .brand { font-size: 19px; }
+}
+
+/* ---------- big QR overlay ---------- */
+.party-dialog { width: min(980px, 100%); max-height: 94vh; }
+.po-body { display: flex; gap: 24px; align-items: center; justify-content: center; text-align: left; }
+.po-qr {
+  flex: 0 0 auto; width: min(58vh, 420px); aspect-ratio: 1; padding: 0; border-radius: 18px;
+  background: #fff4d6; box-shadow: 0 0 40px rgba(255, 201, 74, .25); overflow: hidden;
+}
+.po-qr svg, .pm-qr svg { display: block; width: 100%; height: 100%; }
+.po-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.po-url { margin: 0; font-weight: 800; font-size: 15px; color: var(--muted); word-break: break-all; }
+.po-code { margin: 0; display: flex; align-items: baseline; gap: 10px; }
+.po-code span { font-size: 12px; letter-spacing: 1.2px; color: var(--muted); font-weight: 800; text-transform: uppercase; }
+.po-code b { font-family: var(--font-d); font-weight: 800; font-size: clamp(34px, 6vw, 64px); letter-spacing: 6px; color: var(--gold); }
+.po-count { margin: 4px 0 0; font-family: var(--font-d); font-weight: 800; font-size: 20px; }
+.po-hint { margin: 0; color: var(--muted); font-size: 12px; }
+.po-people { display: flex; flex-wrap: wrap; gap: 6px; max-height: 30vh; overflow-y: auto; }
+.po-chip {
+  padding: 6px 14px; border-radius: 999px; font-weight: 800; font-size: 16px;
+  background: var(--panel-2); border: 1px solid var(--panel-line); animation: poPop .35s ease-out;
+}
+body.tv .po-chip { font-size: 22px; }
+body.tv .po-count { font-size: 28px; }
+.po-chip.away { opacity: .45; }
+.po-chip.hid { text-decoration: line-through; opacity: .55; border-style: dashed; }
+@keyframes poPop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+.po-status { margin: 0; min-height: 1.2em; font-size: 13px; color: var(--muted); }
+.po-status.bad { color: var(--red); }
+@media (max-width: 720px) {
+  .po-body { flex-direction: column; text-align: center; }
+  .po-qr { width: min(78vw, 360px); }
+  .po-code { justify-content: center; }
+  .po-people { justify-content: center; }
+}
+
+/* ---------- mini QR (corner, all screens) ---------- */
+.party-mini {
+  position: fixed; right: 12px; top: 64px; z-index: 7;
+  display: flex; align-items: flex-start; gap: 4px;
+}
+.pm-open {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; border-radius: 14px;
+  background: rgba(7, 6, 26, .85); border: 1px solid var(--panel-line); backdrop-filter: blur(6px);
+}
+.pm-qr { width: 78px; height: 78px; border-radius: 8px; overflow: hidden; background: #fff4d6; }
+.pm-open b { font-family: var(--font-d); font-size: 11px; letter-spacing: 2px; color: var(--gold); }
+.pm-hide {
+  width: 22px; height: 22px; border-radius: 50%; font-size: 11px; line-height: 1;
+  background: var(--panel); border: 1px solid var(--panel-line); color: var(--muted);
+}
+/* the menu has the party strip with the code, so the mini QR shows on the game and end screens */
+body:has(#menu.active) .party-mini { display: none; }
+body.tv .pm-qr { width: 130px; height: 130px; }
+body.tv .pm-open b { font-size: 15px; }
+/* on a phone-sized screen only the code shows, so the mini badge never covers the grid */
+@media (max-width: 720px) {
+  .pm-qr { display: none; }
+  .party-mini { top: 58px; right: 8px; }
+}
+
+/* ---------- battle in the game (P3) ---------- */
+/* row side: the row-number label on that side lights up in the rapper's colour */
+.rows .row.side-L > .lbl:first-child { color: var(--side-l); font-weight: 800; }
+.rows .row.side-R > .lbl:last-child { color: var(--side-r); font-weight: 800; }
+.rows .row.side-L .cell { box-shadow: inset 3px 0 0 rgba(79, 140, 255, .45); }
+.rows .row.side-R .cell { box-shadow: inset -3px 0 0 rgba(255, 90, 79, .45); }
+.rows .row.side-L .cell.rhyme { box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .25), inset 3px 0 0 rgba(79, 140, 255, .8); }
+.rows .row.side-R .cell.rhyme { box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .25), inset -3px 0 0 rgba(255, 90, 79, .8); }
+.rows .row.turn-start { position: relative; }
+.rows .row.turn-start::before {
+  content: attr(data-who); position: absolute; top: -15px; font: 800 10px var(--font-d); letter-spacing: 1px;
+  white-space: nowrap; pointer-events: none;
+}
+.rows .row.side-L.turn-start::before { left: var(--label); color: var(--side-l); }
+.rows .row.side-R.turn-start::before { right: var(--label); color: var(--side-r); }
+body.tv .rows .row.turn-start::before { font-size: 14px; top: -20px; }
+
+/* effects layer over the game and end screens */
+.party-fx { position: fixed; inset: 0; z-index: 8; pointer-events: none; overflow: hidden; }
+body:has(#menu.active) .party-fx { display: none; }
+.pfx-edge { position: absolute; top: 0; bottom: 0; width: 10px; opacity: .25; transition: opacity .25s, width .25s; }
+.pfx-edge.L { left: 0; background: linear-gradient(90deg, var(--side-l), transparent); }
+.pfx-edge.R { right: 0; background: linear-gradient(-90deg, var(--side-r), transparent); }
+.pfx-edge.on { opacity: 1; width: 22px; }
+.pfx-edge.pulse { animation: pfxPulse .6s ease-out; }
+@keyframes pfxPulse { 0% { width: 70px; opacity: 1; } 100% { width: 22px; } }
+
+.pfx-zone { position: absolute; top: 0; bottom: 0; width: 16vw; }
+.pfx-zone.L { left: 0; } .pfx-zone.R { right: 0; }
+.pfx-float {
+  position: absolute; bottom: 4vh; font-size: clamp(26px, 3.4vw, 46px); line-height: 1;
+  display: flex; flex-direction: column; align-items: center; opacity: 0; will-change: transform, opacity;
+}
+.pfx-float small {
+  font: 800 12px var(--font-b); color: var(--text); background: rgba(7, 6, 26, .75); padding: 2px 8px;
+  border-radius: 999px; margin-top: 4px; white-space: nowrap; max-width: 15vw; overflow: hidden; text-overflow: ellipsis;
+}
+body.tv .pfx-float small { font-size: 16px; }
+.pfx-float.go { animation-name: pfxFly; animation-timing-function: cubic-bezier(.2, .6, .4, 1); animation-fill-mode: forwards; }
+@keyframes pfxFly {
+  0% { transform: translate(0, 0) scale(.6); opacity: 0; }
+  12% { opacity: 1; transform: translate(calc(var(--drift) * .2), -6vh) scale(1.1); }
+  100% { transform: translate(var(--drift), -70vh) scale(1); opacity: 0; }
+}
+.pfx-burst {
+  position: absolute; bottom: 12vh; width: 16vw; text-align: center; opacity: 0;
+  font: 800 clamp(22px, 3vw, 40px) var(--font-d); color: var(--gold); text-shadow: 0 0 18px var(--gold-2);
+}
+.pfx-burst.L { left: 0; } .pfx-burst.R { right: 0; }
+.pfx-burst.show { animation: pfxPop 1.2s ease-out; }
+@keyframes pfxPop { 0% { opacity: 0; transform: scale(.6); } 20% { opacity: 1; transform: scale(1.15); } 100% { opacity: 0; transform: scale(1) translateY(-4vh); } }
+.pfx-call {
+  position: absolute; top: 34vh; width: 24vw; text-align: center; opacity: 0;
+  font: 800 clamp(26px, 4vw, 64px) var(--font-d); line-height: 1.05;
+}
+.pfx-call.L { left: 1vw; color: var(--side-l); text-shadow: 0 0 24px var(--side-l); }
+.pfx-call.R { right: 1vw; color: var(--side-r); text-shadow: 0 0 24px var(--side-r); }
+.pfx-call.show { animation: pfxCall 1.6s ease-out; }
+@keyframes pfxCall { 0% { opacity: 0; transform: scale(.5) rotate(-6deg); } 18% { opacity: 1; transform: scale(1.12) rotate(-3deg); } 75% { opacity: 1; } 100% { opacity: 0; transform: scale(1) rotate(-3deg); } }
+
+/* hype meter: a thin tug-of-war bar at the top of the screen */
+.pfx-meter {
+  position: absolute; top: 4px; left: 50%; transform: translateX(-50%); width: min(560px, 70vw);
+  display: flex; align-items: center; gap: 8px; font: 800 11px var(--font-d);
+}
+.pfx-name { flex: 0 1 auto; max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pfx-name.L { color: var(--side-l); } .pfx-name.R { color: var(--side-r); }
+.pfx-bar { flex: 1; height: 8px; border-radius: 999px; background: var(--side-r); overflow: hidden; }
+.pfx-bar i { display: block; height: 100%; width: 50%; background: var(--side-l); transition: width .4s ease-out; }
+body.tv .pfx-meter { font-size: 15px; width: min(900px, 70vw); }
+body.tv .pfx-bar { height: 12px; }
+@media (max-width: 720px) {
+  .pfx-zone, .pfx-burst { width: 18vw; }
+  .pfx-call { width: 30vw; }
+  .pfx-meter { width: 60vw; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pfx-edge.pulse, .pfx-burst.show, .pfx-call.show { animation-duration: .01s; }
+}

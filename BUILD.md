@@ -11,9 +11,11 @@
 **Status:** M0–M10 done (including M3a). The solo game is complete. Open: the user's home
 tests (the checklist at the top of the M10 notes in section 14) and party mode.
 The party is on 2026-12-31.
-
 **Also scoped (2026-11-26), not built:** party mode, section 16 (QR join, phone voting, live
-reactions, ranking). Its milestones P0–P5 wait for the user's decisions in 16.10.
+reactions, ranking; Supabase; duet + 1v1). Milestones P0–P5 in 16.10, decisions in 16.12.
+P0–P3 done (Supabase `rimoboy`, `party/schema.sql`, `party-net.js`, `party-host.js`,
+`party-battle.js`, `party.html`); next party steps: **P4** (phone page) and **P5** (vote +
+results, section 16.10).
 
 **Read in this order:** this section → section 14 (the checklist, with implementation notes
 under each finished milestone: *the code is the source of truth where they differ from
@@ -1312,7 +1314,7 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
     end.js seeks once past the end, then back to 0.
   - Skipped (optional): extra SoundCloud help text (the REC note covers the limit the player
     meets) and a separate shareable page (the Vercel site exists).
-- [ ] **P0–P5** Party mode: QR join, live reactions, audience vote, ranking (section 16.8; scoped 2026-11-26, waits for the decisions in 16.10)
+- [ ] **P0–P5** Party mode: QR join, live reactions, audience vote, ranking (section 16.10; decisions in 16.12). P0–P3 done 2026-11-26 (see 16.10: Supabase `rimoboy`, anonymous sign-ins on, 30/hour/IP kept). Next: P4, P5
 
 ---
 
@@ -1386,7 +1388,26 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
   Two agent reviews (M8 code, M9 words); all confident findings fixed (see the M8 and M9
   notes in section 14). **Next: M10** (full test pass).
 - **2026-11-26, session 11:** Scoped party mode (section 16, milestones P0–P5). No code.
-  The decisions in 16.10 wait for the user. **Next: M9** (word lists), unchanged.
+  User decisions (16.12): Supabase, both battle formats (duet + 1v1), 1–5 stars, a
+  who-rated-whom table, optional rapper names. **Next: M9** (word lists), unchanged; party
+  mode starts with P0 (connect the Supabase connector).
+- **2026-11-26, session 11 (P3):** Battles in the game (`js/party-battle.js`, hooks in
+  `game.js`, `#partyFx`). Agent review fixes: the round starts only when the beat plays; turn
+  and edge logic no longer depend on seeing one exact cell; failed writes toast and resend;
+  `start_round` retries and a failed re-read no longer loses the round number; cancelled
+  rounds are marked; flying nodes are recycled when the layer hides; reactions of a guest not
+  loaded yet are replayed; hype is rate-limited per guest; queued writes never reach a new
+  or closed room; "Нова стая" / "Край на партито" stop a running battle with a toast; the
+  1v1 waiting state is cancelled on every way back to the menu. Then committed and pushed.
+  **Next: P4** (phone page polish) and **P5** (vote + results).
+- **2026-11-26, session 11 (P1 + P2):** Party transport (`party-net.js`), bare phone page,
+  load test (21/21 PASS with 20 phones) and the host lobby (`party-host.js`, QR overlay,
+  strip, mini QR). Verified in the browser; reviewed by an agent (see 16.10). **Next: P3**
+  (battles in the game), or M10.
+- **2026-11-26, session 11 (later):** P0 database part done: Supabase project `rimoboy`
+  (eu-west-2), `party/schema.sql` applied and RLS-tested in SQL, `js/party-config.js`. Open
+  for the user: anonymous sign-ins on, rate limit up, the Vercel URL. **Next: M9**, or P1
+  when the user wants party mode first.
 - **2026-11-26, session 12 (M10):** M10 done: all of section 13 run in the preview browser
   (see the M10 notes in section 14). Fixed: long words cut off on phones (chart.js, CSS),
   recording at full scale (audio.js, rec.js), recording player without a length (end.js).
@@ -1399,85 +1420,104 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
 
 ### 16.1 Goal
 
-Two rappers battle on one beat. Player 1 stands on the **left** of the screen, player 2 on
-the **right**, as the audience sees them. The host taps one button. A QR code appears on the
-TV. People scan it, type a name, and their phone becomes a remote with a left half and a
-right half. During the song they send reactions that fly up on that side of the TV and fill
-a hype meter. When the song ends, they rate both rappers, and the ranking builds up live on
-the TV.
+Two rappers battle. Player 1 stands on the **left** of the screen, player 2 on the **right**,
+as the audience sees them. The host taps one button. A QR code appears on the TV. People
+scan it, type a name, and their phone becomes a remote with a left half and a right half.
+During the song they send reactions that fly up on that side of the TV and fill a hype
+meter. When the battle ends, every guest gives each rapper 1–5 stars. The ranking and every
+guest's score build up live on the TV.
 
 **Design rule: ease of use first.** One tap on the laptop, one scan, one name, no app, no
-account for the audience. Everything else is optional.
+account for the audience. A new battle with new rappers needs no typing: the default names
+"Играч 1" / "Играч 2" are always fine.
 
-### 16.2 Architecture (recommended: Firebase Realtime Database)
+### 16.2 Battle formats (user decision 2026-11-26: both)
+
+The host picks the format per battle in the party strip (16.5): **"Дует"** or **"1 на 1"**.
+
+**Дует (duet, one song).** The rappers trade turns inside one game.
+`side(bar) = floor((bar - 1) / turnBars) % 2 === 0 ? 'L' : 'R'`. Turn length "4 бара" or
+"8 бара" (default 4). `turnBars` = max(setting, pattern cycle in bars), so a rhyme cycle
+(for example AA_A, 8 bars) is never split between two rappers. Vote after the song.
+
+**1 на 1 (full song against full song).** Two games, one per rapper. Part 1: the left
+rapper raps a whole game. On the end screen, the button "▶ Играч 2 (дясно)" replaces "Играй
+пак" and starts part 2 with the same beat and settings and new words (fair: same beat,
+same length). Part 2: the right rapper. Vote after part 2. "Меню" between the parts cancels
+the battle (no vote).
+
+In both formats, the side that raps now is highlighted on the TV and on the phones. Guests
+can react to both sides at any time.
+
+### 16.3 Architecture: Supabase (user decision 2026-11-26)
 
 The site is static on Vercel. Vercel functions cannot keep WebSockets open, and the phones
-are on other networks (4G, guest Wi-Fi), so a hosted realtime service must relay the
-messages. **Recommendation: Firebase Realtime Database (free Spark plan) + Anonymous Auth**,
-loaded from the official `firebase-*-compat.js` scripts (plain `<script>` tags, no modules,
-no npm; pin an exact version in P1).
+are on other networks (4G, guest Wi-Fi), so a hosted realtime service relays the messages.
+**Supabase** (the user's account, free plan): Postgres tables for everything that must
+survive (rooms, people, rounds, votes), Realtime for the live parts, Anonymous Sign-Ins for
+the guests. Client: the `supabase-js` v2 UMD build from jsDelivr (plain `<script>`, exposes
+`window.supabase`; pin an exact version in P1). No server code: the SQL in 16.7 is the whole
+backend.
 
-Why this service:
-- No server code. One small rules file (16.6) is all the backend.
-- **State, not only messages.** Names, votes and hype counts are stored under the room. A
-  phone that locks its screen, reloads or joins late reads the current state at once. A host
-  that reloads the page loses nothing. A broadcast-only service (Supabase Realtime, Ably,
-  PeerJS) needs extra resync code for every one of these cases.
-- Writes reach only the listeners of that path. The phones do not receive the other phones'
-  taps, so the traffic grows linearly with the audience.
-- The Spark plan has no billing at all: at the limit it stops, it never charges.
-- Limits that matter: **100 simultaneous connections per database** (all rooms together),
-  10 GB download per month. A house party fits. A club does not.
+**Which channel carries what:**
 
-Alternatives, in case the user does not want a Google project: Supabase Realtime (broadcast
-+ presence; 200 connections free, but resync and fan-out must be hand-made, and a free
-project pauses after a week without use); PeerJS WebRTC with the laptop as the hub (no
-account, but phones on 4G behind strict NAT fail without a TURN server: too risky for a
-party).
+| Data | Path | Why |
+|---|---|---|
+| Room state (phase, round, part, names, turn, vote end) | `rooms.state` (jsonb). Host updates the row; phones subscribe with Postgres Changes (`id=eq.<room>`) and read the row once on load | Survives reloads; changes are rare (phase or turn changes only) |
+| Names | `people` table, via the `join_room` RPC | Late joins and reloads read it |
+| Stars | `votes` table, upsert per (room, round, uid, side) | Durable and attributable; the host subscribes with Postgres Changes for the live tally |
+| Reactions + hype totals | Realtime **Broadcast** on channel `rb-up-<room>`. **Only the host subscribes.** Phones send with `channel.httpSend()` (REST), so they never receive each other's taps | Ephemeral and frequent. A phone subscribed to the channel would receive every tap of every phone (fan-out of N²) |
+| Final hype totals, results | `rounds.hype`, `rounds.results`, written by the host at the end | History and the session ranking |
 
-**The host is the authority.** Only the host laptop writes the room `state` (phase, round,
-names, turn, results). The phones write only their own entries. The host computes every
-result.
+**The host is the authority.** Only the host updates `rooms` and `rounds`. Phones write only
+their own `people` and `votes` rows. The host computes every result.
+
+**Message budget** (measured in P1, section 16.10): a phone sends at
+most one broadcast per 800 ms (`RBNet.SEND_MS`), and only when it has new taps. 30 tapping phones ≈ 60
+messages/s, about 11 000 per 3-minute song; 40 songs ≈ 0.45 million per party night.
 
 **Unique link per session.** Room id = 6 characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`
 (no 0/O/1/I), made with `crypto.getRandomValues` (32^6 ≈ 1 billion). Link:
-`<PARTY_BASE>/party.html?r=K7P3QX`. Rooms are separate database paths, so any number of
-sessions can run at the same time on different laptops. The room id is the secret: the rules
-forbid listing `/rooms`.
+`<PARTY_BASE>/party.html?r=K7P3QX`. Rooms are separate rows and channels, so any number of
+sessions can run at the same time on different laptops. The rows of a room are readable
+only by its host and its members (16.7), and joining needs the code, so rooms cannot be
+listed.
 
 **Public base URL.** The phones cannot open `localhost`. `PARTY_BASE` = `location.origin`
 when the page is served over https from a non-local host (the Vercel site). Otherwise it is
 the deployed Vercel URL from `js/party-config.js`. So the host can run the game from
-`start.bat`, and the QR still points to the live site. The party files must be deployed
-(a push to `main`) before the party.
+`start.bat`, and the QR still points to the live site. The party files must be deployed (a
+push to `main`) before the party.
 
 **Constraint 3 exception:** party mode needs internet on the laptop and on every phone. The
 rest of the app keeps working offline. Without a connection or without the config, the
 Парти button shows the toast "Парти режимът иска интернет." and nothing else changes.
 
-### 16.3 Data model
+### 16.4 State model
 
 ```
-rooms/{roomId}
-  meta:   {hostUid, created}                        // written once, by the host
-  state:  {phase, round, left, right, turnBars,     // host only
-           turn: 'L'|'R'|null, voteEndsAt, results}
-          phase: 'lobby' | 'live' | 'vote' | 'results' | 'closed'
-          round: 'r1', 'r2', ... (string; one round = one song = one battle)
-          left / right: rapper names (defaults "Играч 1" / "Играч 2")
-  people/{uid}:            {name, joinedAt, seenAt}  // each phone, own uid only
-  hype/{round}/{uid}:      {L: n, R: n}              // own running totals (idempotent set)
-  votes/{round}/{uid}:     {L: 1-5, R: 1-5, at}      // own only, only while phase = 'vote'
-  reactions/{pushId}:      {uid, side, emoji, n, at} // fire-and-forget; the host deletes them
+rooms.state = {
+  phase: 'lobby' | 'live' | 'between' | 'vote' | 'results' | 'closed',
+  round: 3,                       // rounds.round of the current battle
+  mode: 'duet' | '1v1',
+  part: 1 | 2,                    // 1v1 only: which rapper's song
+  left: 'Играч 1', right: 'Иван', // names of this battle
+  turn: 'L' | 'R' | null,         // who raps now
+  voteEndsAt: <ISO time>          // server time, see below
+}
 ```
 
-- `uid` = the Anonymous Auth user id. The browser keeps it, so the same phone rejoins as the
-  same person (name, votes and hype stay).
-- Times use the server clock (`firebase.database.ServerValue.TIMESTAMP` and
-  `.info/serverTimeOffset`), so the vote countdown agrees on every device.
-- Results: `{L: {avg, n}, R: {avg, n}, winner: 'L'|'R'|'tie', hype: {L, R}, topHypers: [{name, n}]}`.
+- `between` = 1v1 after part 1 (phones show "Следва Играч 2").
+- `uid` = the Anonymous Sign-In user id (`auth.uid()`). supabase-js keeps the session in
+  `localStorage`, so the same phone rejoins as the same person (name, votes and hype stay).
+- Vote countdown: `voteEndsAt` is set with `now()` on the server (an RPC), and each client
+  measures its clock offset once from the RPC response, so the countdown agrees everywhere.
+  The `votes` policy enforces the end on the server too.
+- Broadcast payload phone → host: `{uid, side, emoji, n, totL, totR}`. `n` = new taps since
+  the last message (for the animation). `totL`/`totR` = this phone's running totals for the
+  round (idempotent, so a lost message or a host reload loses nothing).
 
-### 16.4 Host side (laptop, `index.html`)
+### 16.5 Host side (laptop, `index.html`)
 
 **Button.** `🎉 Парти` in the top bar (next to `📺`). The first tap creates the room (the
 room id is kept in `sessionStorage`, so a reload keeps the same room) and opens the party
@@ -1487,156 +1527,394 @@ overlay.
 - A large QR code (about 60 % of the screen height), title "Сканирай и гласувай!", under it
   the short URL and the code `K7P3QX` in big letters (for people who type it).
 - "Влезли: N" and the names as chips that pop in when people join. The host can tap a chip
-  to hide a name (bad words): the person stays in the vote, and the TV no longer shows the
-  name.
-- Rapper names: two inputs "Ляво" / "Дясно" (defaults "Играч 1" / "Играч 2").
-- Turn length: "Смяна на всеки: 4 бара | 8 бара" (default 4).
+  to hide a name (bad words): the person keeps voting, and the TV shows "Гост" instead.
+- "История": the past battles of this room with their results and per-guest stars (16.6).
 - Buttons "Затвори" (party stays on), "Нова стая" (new code), "Край на партито"
   (`phase = 'closed'`, the phones show "Партито свърши. Благодарим!").
+
+**Party strip in the menu** (only while party mode is on; above the Play button):
+- Format: chips "Дует" / "1 на 1". Duet also shows "Смяна на всеки: 4 бара | 8 бара".
+- Names: two inputs, **empty by default**, placeholders "Играч 1 (ляво)" / "Играч 2
+  (дясно)". An empty input = the default name. The host can type names or skip them.
+- After every battle, both inputs are cleared again (the next song has other people). A
+  small toggle "Същите рапъри" keeps the names for the next battle (off by default).
+- Play starts the battle: a new `rounds` row, `phase = 'live'`.
 
 **Mini QR.** While party mode is on, a small QR with the code stays in a corner of the menu,
 game and end screens, so late guests can join. A tap opens the big overlay again. It can be
 hidden.
 
 **Battle in the game** (changes in `game.js`, only when party mode is on):
-- The rappers take turns: `side(bar) = floor((bar - 1) / turnBars) % 2 === 0 ? 'L' : 'R'`.
-  `turnBars` = max(setting, pattern cycle in bars), so a rhyme cycle (for example AA_A,
-  8 bars) is never split between two rappers.
-- Rows get the class `side-L` / `side-R`: a coloured glow on the left or right edge of the
-  row and a small name label. The left and right colours are new tokens, not rhyme colours.
-- Header during the count-in: "Започва ИВАН". In the last bar of a turn: "Следва МАРИЯ ▶".
-- The host writes `state.turn` only when the turn changes, never per frame.
-- The game calls the new hooks `RB.party.onStart(G)` and `RB.party.onTurn(side)`. The
-  existing `RB.onGameEnd(G)` starts the vote. The beat timing code does not change.
+- Duet: rows get the class `side-L` / `side-R`: a coloured glow on that edge of the row and
+  a small name label. Header during the count-in: "Започва ИГРАЧ 1". In the last bar of a
+  turn: "Следва ИГРАЧ 2 ▶". 1v1: the whole game has the colour of its side; the header shows
+  the rapper's name.
+- The left and right colours are two new tokens, not rhyme colours.
+- The host updates `state.turn` only when the turn changes, never per frame.
+- New hooks: `RB.party.onStart(G)`, `RB.party.onTurn(side)`. The existing `RB.onGameEnd(G)`
+  leads to `between` (1v1 part 1) or to the vote. The beat timing code does not change.
 
 **Reactions layer** `#partyFx` (over the game and end screens, `pointer-events: none`):
 - Emoji float up in the left or right edge zone, so they do not cover the grid. Animate only
   `transform` and `opacity` (the ball loop must not drop frames). At most 30 nodes at a time,
   recycled. Above that, the host merges them into one burst ("+12 🔥").
 - One reaction in five shows the sender's name, and so does the first reaction of each
-  person in a round ("Петя 🔥").
+  person in a battle ("Петя 🔥").
 - **Hype meter:** a thin tug-of-war bar under the header, left colour against right colour,
-  share of this round's hype points.
+  share of this battle's hype points.
 - **Hype calls**, to push the crowd: at 50 / 150 / 300 points on a side a big short text
   flashes on that side ("Залата гори!", "ОГЪН!", "Неудържим!"). When one side has 10 or more
   taps in 2 s, its edge pulses.
 - No sound effects (they would get into the REC recording and clash with the beat).
 
-**Vote and results** (end screen, after "Страхотни барове!"):
-- `phase = 'vote'`, `voteEndsAt` = now + 20 s. The TV shows "Гласувайте сега!" with a big
-  countdown and two columns (left name, right name). The average stars and the vote count of
-  each column grow **live** as the votes arrive.
-- At 0: the host reads the votes, writes `results`, and `phase = 'results'`. Reveal: the
-  winner's column grows, "ПОБЕДИТЕЛ: ИВАН" (or "Равенство!"), confetti (`RB.end.confetti()`).
+### 16.6 Vote, results and who rated whom
+
+**Vote** (end screen, after "Страхотни барове!"; in 1v1 after part 2):
+- RPC `start_vote` → `phase = 'vote'`, `voteEndsAt` = now + 20 s. The TV shows "Гласувайте
+  сега!" with a big countdown and two columns (left name, right name).
+- **Live:** each column shows its average stars and the vote count, and they grow as the
+  votes arrive. Under the columns, a live feed of the votes: "Петя — Играч 1 ★★★★☆ · Играч 2
+  ★★★★★". A changed vote updates its line.
+- At 0: the host reads the votes, writes `rounds.results` and `rounds.hype`, and `phase =
+  'results'`.
+
+**Results:**
+- Reveal: the winner's column grows, "ПОБЕДИТЕЛ: ИГРАЧ 1" (or "Равенство!"), confetti
+  (`RB.end.confetti()`).
 - Ranking: winner = the higher average of stars. Tie on the average → the higher hype total.
   Still a tie → "Равенство!". Hype alone never wins.
-- Under it: **"Топ хайпъри"** (the 3 audience names with the most taps) and the **session
-  ranking** of rappers by name over all rounds of the room (wins, then the average stars).
-- "Играй пак" starts the next round (`round` + 1, the same rapper names, they can swap
-  sides). "Меню" puts the room back in `lobby`.
+- **Who rated whom (user request):** a full table under the reveal: one row per guest, with
+  the stars that guest gave the left rapper and the right rapper (an empty cell when a guest
+  rated one side only). Sorted by name. On a TV it auto-scrolls when it is longer than the
+  screen. Hidden names show as "Гост". The same table is in "История" for past battles (the
+  data stays in `votes`).
+- Also: **"Топ хайпъри"** (the 3 guests with the most taps) and the **session ranking** of
+  the battles of the room (winner name, average stars). Default names ("Играч 1") are not
+  merged across battles, because they are different people every time.
+- "Нов батъл" → back to the menu with the party strip (names cleared), `phase = 'lobby'`.
 
-### 16.5 Phone side (`party.html`, own small page)
+**Phones tell the guest that the vote is public:** "Името и оценката ти се виждат на екрана."
 
-Bulgarian, the same "midnight party" look, no menu, works at 360 px, about 50 KB without
-the Firebase scripts.
+### 16.7 Database (SQL migration in `party/schema.sql`)
 
-1. **Join:** "Как се казваш?" (input, 1–16 characters, kept in `localStorage`) → "Влизам".
-   The second time, the name is filled in and one tap joins.
-2. **Lobby:** "Чакаме батъла…" with the two rapper names, left and right.
-3. **Live** (`phase = 'live'`): the screen is split into two large tap zones, left and right,
-   in the side colours, with the rapper names. The rapper who is on now is highlighted. A tap
-   on a zone = one 🔥 for that side. An emoji row (🔥 😂 🤯 👏 💀) picks what the tap sends.
-   Short vibration (`navigator.vibrate(10)`), own tap count shown.
-   - Taps are counted locally at most 6 per second. Every 400 ms the phone writes its totals
-     to `hype` and pushes one `reactions` entry per side with `n` = new taps.
-   - Screen Wake Lock (`navigator.wakeLock`) keeps the screen on during the song.
-4. **Vote** (`phase = 'vote'`): "Оцени рапърите" with 5 big stars for each side, the countdown,
-   and "Изпрати". The phone can change the vote until the time is up. One side is enough.
-5. **Results:** the winner, the two averages, and "Ти даде 🔥 × 34". Then back to the lobby.
+> Sketch from the scoping. The applied schema is `party/schema.sql`; see the P0 notes in
+> 16.10 for what it does differently (RPCs for rooms, people and the round lifecycle).
 
-Reconnect: Firebase reconnects by itself. The phone always draws itself from `state`, so a
-reload or an unlocked screen lands in the right phase without extra code. `people/{uid}.seenAt`
-updates every 30 s. "Влезли" on the TV counts people seen in the last 2 minutes.
-
-### 16.6 Security rules (`party/database.rules.json`, pasted into the Firebase console)
-
-```json
-{ "rules": { "rooms": { "$room": {
-  ".read": "auth != null",
-  "meta":  { ".write": "!data.exists() && newData.child('hostUid').val() === auth.uid" },
-  "state": { ".write": "root.child('rooms/' + $room + '/meta/hostUid').val() === auth.uid" },
-  "people": { "$uid": { ".write": "auth.uid === $uid",
-    ".validate": "newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 16" } },
-  "hype":  { "$round": { "$uid": { ".write": "auth.uid === $uid" } } },
-  "votes": { "$round": { "$uid": { ".write": "auth.uid === $uid && root.child('rooms/' + $room + '/state/phase').val() === 'vote' && root.child('rooms/' + $room + '/state/round').val() === $round" } } },
-  "reactions": { "$id": { ".write": "(!data.exists() && newData.child('uid').val() === auth.uid) || (!newData.exists() && root.child('rooms/' + $room + '/meta/hostUid').val() === auth.uid)" } }
-} } } }
+```sql
+create table rooms (
+  id text primary key check (id ~ '^[A-HJ-NP-Z2-9]{6}$'),
+  host uuid not null default auth.uid(),
+  state jsonb not null default '{"phase":"lobby"}',
+  created_at timestamptz not null default now()
+);
+create table people (
+  room text not null references rooms on delete cascade,
+  uid uuid not null default auth.uid(),
+  name text not null check (char_length(btrim(name)) between 1 and 16),
+  hidden boolean not null default false,          -- set by the host
+  joined_at timestamptz not null default now(),
+  seen_at timestamptz not null default now(),
+  primary key (room, uid)
+);
+create table rounds (
+  room text not null references rooms on delete cascade,
+  round int not null,
+  mode text not null check (mode in ('duet','1v1')),
+  left_name text not null, right_name text not null,
+  started_at timestamptz not null default now(),
+  vote_ends_at timestamptz,
+  hype jsonb, results jsonb,
+  primary key (room, round)
+);
+create table votes (
+  room text not null, round int not null,
+  uid uuid not null default auth.uid(),
+  side text not null check (side in ('L','R')),
+  stars smallint not null check (stars between 1 and 5),
+  updated_at timestamptz not null default now(),
+  primary key (room, round, uid, side),
+  foreign key (room, round) references rounds on delete cascade
+);
 ```
 
-No read rule on `/rooms` itself, so nobody can list the rooms. P1 adds `.validate` rules
-for the value ranges (stars 1–5, side `L`/`R`, emoji from the list) and checks every rule in
-the Firebase rules simulator.
+**Row Level Security** (on for all 4 tables; anonymous users have the `authenticated` role):
+- Helpers, `security definer`, `stable`: `is_host(room)` and `is_member(room)` (a row in
+  `people` for `auth.uid()`). They avoid recursive policies.
+- `rooms`: insert with `host = auth.uid()`; select if host or member; update if host.
+- `people`: no direct insert. RPC `join_room(code, name)` (`security definer`) checks that
+  the room exists and is not closed, upserts the caller's row and returns the room state.
+  Select if host or member. Update: own row (`name`, `seen_at`) or host (`hidden`).
+- `rounds`: insert/update if host; select if host or member.
+- `votes`: select if host or member (the table is shown on the TV anyway). Insert/update
+  only `uid = auth.uid()`, the caller is a member, the round is the room's current round,
+  `state->>'phase' = 'vote'`, and `now() < rounds.vote_ends_at` (+2 s grace).
+- RPC `start_vote(room, seconds)` (host only) sets `vote_ends_at` and the state, and returns
+  the server time.
+- Realtime: add `rooms` and `votes` to the `supabase_realtime` publication. Postgres Changes
+  respects RLS, so a phone only gets its own room.
 
-Privacy: the only personal data is the first name that a guest types. It is visible to
-everyone who has the room code. Old rooms: when the host creates a room, it deletes its own
-rooms older than 24 h (P2).
+**Auth settings (dashboard):** turn on Anonymous Sign-Ins. **Raise the anonymous sign-in rate
+limit** (default 30 per hour per IP): at a party every phone on the same Wi-Fi has the same
+public IP, so the 31st guest would be refused.
 
-### 16.7 New files
+**Retention:** keep the rooms (the history is a feature). Optional: a `pg_cron` job deletes
+rooms older than 30 days.
+
+Privacy: the only personal data is the name a guest types, plus their stars. Both are
+visible to the room (host and members) and on the TV. The phone says so before the vote.
+
+### 16.8 Phone side (`party.html`, own small page)
+
+Bulgarian, the same "midnight party" look, no menu, works at 360 px, about 50 KB without
+the Supabase script.
+
+1. **Join:** "Как се казваш?" (input, 1–16 characters, kept in `localStorage`) → "Влизам"
+   (anonymous sign-in once, then `join_room`). The second time, the name is filled in and
+   one tap joins.
+2. **Lobby:** "Чакаме батъла…" with the format and the two rapper names.
+3. **Live** (`phase = 'live'`): the screen is split into two large tap zones, left and right,
+   in the side colours, with the rapper names. The rapper who raps now is highlighted. A tap
+   on a zone = one reaction for that side. An emoji row (🔥 😂 🤯 👏 💀) picks what the tap
+   sends. Short vibration (`navigator.vibrate(10)`), own tap count shown.
+   - Taps are counted at most 6 per second. Every 500 ms, when there are new taps, the phone
+     sends one broadcast (16.4).
+   - Screen Wake Lock (`navigator.wakeLock`) keeps the screen on during the song.
+4. **Between** (1v1): "Следва Играч 2 (дясно)". The tap zones stay.
+5. **Vote** (`phase = 'vote'`): "Оцени рапърите", 5 big stars for each side, the countdown and
+   the note "Името и оценката ти се виждат на екрана." Each star tap upserts at once (no
+   submit button); the guest can change it until the time is up. One side is enough.
+6. **Results:** the winner, the two averages, "Ти даде: ★4 / ★5" and "Ти даде 🔥 × 34". Then
+   back to the lobby.
+
+Reconnect: supabase-js reconnects by itself. On reconnect and on `visibilitychange` →
+visible, the phone reads `rooms.state` again and draws that phase. `people.seen_at` updates
+every 30 s. "Влезли" on the TV counts the people seen in the last 2 minutes.
+
+### 16.9 New files
 
 ```
 party.html               ← phone page
 css/party.css            ← phone page styles (shares the tokens of section 6)
-js/party-config.js       ← window.RB_PARTY = {firebase:{...}, base:'https://<vercel site>'}; committed
-                           (a Firebase web config is public by design; the rules protect the data)
-js/party-net.js          ← the only file that talks to Firebase: createRoom, joinRoom, watch, write helpers
-js/party-host.js         ← RB.party: button, overlay, QR, lobby, battle hooks, reactions layer, vote, results
+js/party-config.js       ← window.RB_PARTY = {url, key, base}; committed. The publishable (anon)
+                           key is public by design; RLS protects the data. Never the service_role key.
+js/party-net.js          ← the only file that talks to Supabase (host and phone share it)
+js/party-host.js         ← RB.party: button, overlay, QR, party strip, battle hooks, reactions, vote, results
 js/party-phone.js        ← phone page logic
-js/vendor/qrcode.js      ← qrcode-generator (Kazuhiko Arase, MIT), vendored with its licence header
-party/database.rules.json
-tests/party-sim.html     ← ?r=CODE&n=30: 30 fake phones (separate Firebase app instances, each its own anonymous user)
+css/party-host.css       ← host-side styles (strip, overlay, mini QR)
+(qrcode-generator@2.0.4, MIT, is loaded from jsDelivr on demand instead of vendored)
+party/schema.sql         ← tables, RLS, RPCs, publication (16.7); applied as a migration
+tests/party-sim.html     ← ?r=CODE&n=30: 30 fake phones (separate clients with their own
+                           storageKey, so each is its own anonymous user)
 ```
 
-### 16.8 Milestones
+### 16.10 Milestones
 
-- **P0 (the user, about 15 min, with the agent's step-by-step guide):** create a Firebase
-  project on the Spark plan, add a Realtime Database (region `europe-west1`), turn on
-  Anonymous sign-in, add the Vercel domain to the authorized domains, paste the rules (16.6),
-  and paste the web config into the chat. The agent cannot create accounts.
-- **P1 transport spike:** `party-net.js`, `party-config.js`, a bare `party.html`, the rules,
-  `tests/party-sim.html`. Pass: 30 simulated phones join one room; a tap reaches the host in
-  under 300 ms (median); a reload of the host or a phone keeps the room; a second room in
-  another tab does not see the first.
-- **P2 host lobby:** the Парти button, the room, the QR overlay, names live, hide a name,
-  rapper names, turn length, the mini QR, "Нова стая", "Край на партито".
-- **P3 battle in the game:** turns, row sides, header texts, `state.turn`, reactions layer,
-  hype meter, hype calls. Pass: no lost ball frames with 30 simulated phones tapping.
-- **P4 phone page:** join, lobby, live tap zones and emoji, vote, results, wake lock,
-  reconnect. Real test: 3 phones (Android + iPhone), on 4G and Wi-Fi, lock and unlock during
-  a song.
-- **P5 results:** vote phase with the live columns, the reveal, top hypers, the session
-  ranking, "Играй пак" as the next round. Then a full party rehearsal with real phones,
-  before 2026-12-20, so there is time for fixes before 2026-12-31.
+- **P0 setup:** *database part done 2026-11-26.* Supabase project **`rimoboy`** (ref
+  `gpjwptfyvcvlwvfbsprv`, region `eu-west-2` London, org `rimoboy`, free plan). Migrations
+  `party_schema` + `party_drop_unused_delete_policy` applied; **`party/schema.sql` is the
+  source of truth** (it wins over the sketch in 16.7). `js/party-config.js` has the URL and
+  the publishable key (not loaded by any page yet).
+  - What the schema adds to 16.7: rooms are made only by the RPC `create_room()` (server
+    random code, max 10 per host per hour); guests write `people` only through
+    `join_room(p_room, p_name)` (returns `{room, state, now}`), `touch_room(p_room)` and the
+    host's `set_hidden(p_room, p_uid, p_hidden)`; `start_round(p_room, p_mode, p_left,
+    p_right)` → round number and `state.phase = 'live'`; `start_vote(p_room, p_seconds)` →
+    `{round, voteEndsAt, now}`. The host updates `rooms.state` (turn, part, phase) and
+    `rounds.hype/results` directly. `votes` has a foreign key to `people`, so only members
+    can vote. Realtime publication: `rooms`, `people`, `votes`. Policy helpers live in the
+    unexposed schema `private`.
+  - RLS tested in SQL with a fake host, 2 guests and an outsider (rolled back): outsider sees
+    0 rooms/people/votes; guest cannot start a round, change the room, hide names or update
+    rounds; early vote, late vote, a vote for another uid, a non-member vote and 9 stars are
+    refused; upsert changes a vote; `anon` gets nothing. Security advisor: only the expected
+    "authenticated can execute SECURITY DEFINER" warning for the 6 RPCs (each checks the
+    caller itself). Performance advisor: clean.
+  - Dashboard (done by the user 2026-11-26): anonymous sign-ins **on**; the rate limit stays
+    at the default 30 per hour per IP (user decision). `RB_PARTY.base` =
+    `https://bulgarianrhymegame.vercel.app`.
+- **P1 transport spike — done 2026-11-26.** `js/party-net.js` (`window.RBNet`: `available()`,
+  `joinUrl(code)`, `normCode(s)`, `baseUrl()`, `SEND_MS` = 800, class `PartyNet({storageKey})` with
+  `signIn`, `now()` (server clock from RPC answers), host `createRoom/loadRoom/patchState/
+  startRound/startVote/setHidden/saveRound/people/votes/rounds/hostListen`, phone `join/
+  readState/watchRoom/sendUp/vote/touch`, `close`). supabase-js **2.119.2** UMD from jsDelivr.
+  Bare `party.html` + `js/party-phone.js` + `css/party.css` (join, lobby, tap zones + emoji,
+  vote stars, closed/moved messages; P4 polishes it). `tests/party-sim.html?n=20&auto`.
+  - Reaction payload (changed from 16.4): one message per batch for both sides,
+    `{uid, e, nL, nR, totL, totR, round, at}`. A phone sends only when it has new taps.
+  - **Result, 20 simulated phones + a second room: 21/21 PASS.** Joins 0.7 s for all; host
+    sees each join live; tap → host median **61 ms** (p95 146, max 168); 195/195 batches
+    delivered; ≈39 realtime events/s with all 20 tapping non-stop (free limit 100/s, so about
+    45 phones); state change to all phones ≈0.5 s (RPC + Postgres Changes), turn change
+    ≈0.75 s (**P3: send the turn about 1 s before the bar starts**); votes reach the host in
+    ≈0.5 s; upsert changes a vote; early / late / other-room votes refused (42501); host and
+    phone reloads keep the room, the user and the phase; rooms isolated both ways.
+  - Manual phone check (375 px): join → lobby → live 1v1 (left zone highlighted) → taps
+    reach the host with the right totals → stars saved (L 4, R 5).
+  - **Anonymous sign-in limit stays at 30 per hour per IP (user decision 2026-11-26).**
+    Guests on one Wi-Fi share an IP, so at most about 30 new phones per hour; a phone that
+    already joined keeps its session and needs no new sign-in. The simulator uses 20 phones
+    for this reason.
+- *P1 original brief:* `party/schema.sql` applied, `party-net.js`, `party-config.js`, a
+  bare `party.html`, `tests/party-sim.html`. Pass: 30 simulated phones join one room; a tap
+  reaches the host in under 300 ms (median); the phones receive no broadcasts of other
+  phones; a vote outside the vote window is refused by RLS; a second room does not see the
+  first; a reload of the host or a phone keeps the room. Check the current free-plan Realtime
+  quotas.
+- **P2 host lobby — done 2026-11-26.** New `js/party-host.js` (`RB.party = {on, code, net,
+  people, battle(), afterBattle(), open(), close()}`) and `css/party-host.css`; small edits in
+  `index.html` only (🎉 `#partyBtn` in the top bar, `#partyStrip` at the top of the menu,
+  `#partyOv` overlay, `#partyMini`, the 3 party scripts after tutorial.js). supabase-js and
+  `qrcode-generator@2.0.4` (MIT, from jsDelivr, not vendored) load **only when party mode
+  starts**, so the app still works offline.
+  - 🎉 → toast "Свързвам парти стаята…" → room → overlay with the QR (own SVG, dark on cream,
+    `M` error correction), the URL, the code, "Влезли: N" (seen in the last 2 min) and the
+    guest chips (pop-in animation; tap = hide/show on the TV via `set_hidden`; hidden = struck
+    through). Esc, ✕, "Затвори" and the backdrop close it; while it is open, P, T and Space do
+    nothing (a window capture listener). Opening it during a game pauses the game.
+  - Party strip (menu): room button with code + count (opens the overlay), format chips
+    "Дует" / "1 на 1", "Смяна на всеки 4 / 8 бара" (duet only), two name inputs (placeholders
+    "Играч 1 (ляво)" / "Играч 2 (дясно)"), "Същите рапъри". Saved in `sessionStorage`
+    `rb_partyBattle`. `battle()` → `{mode, turnBars, left, right}` with the defaults for empty
+    names; `afterBattle()` clears the names unless "Същите рапъри" is on. Enter in a name field
+    = Play.
+  - Mini QR: top right, on the game and end screens only (the menu has the strip); code only
+    at ≤720 px; bigger in TV mode; ✕ hides it until the overlay is opened again.
+  - "Нова стая" (confirm) closes the old room with `{phase:'closed', moved:true}` (its phones
+    show "Тази стая е затворена. Сканирай новия код.") and makes a new one. "Край на партито"
+    (confirm) closes the room, clears the session, hides the strip and the mini QR.
+  - Reload: `rb_partyRoom` in `sessionStorage` + the host user in `localStorage`
+    (`rb-party-host`) → the same room, guests and hidden flags come back.
+  - At ≤420 px the 4 top-bar buttons shrink to 36 px so the brand stays clear.
+  - Verified in the browser (1024 px and 360 px): start, QR + URL
+    `bulgarianrhymegame.vercel.app/party.html?r=…` from localhost, a guest from a second tab
+    appears live, hide → saved in the DB, close/open, strip settings + `battle()` /
+    `afterBattle()` / "Същите рапъри", P blocked and Esc closing while open, reload resumes,
+    "Нова стая" (old phone sees the moved message), "Край на партито", no horizontal scroll at
+    360 px, no new console errors. **Not tested:** scanning the QR with a real phone (needs the
+    party files deployed), TV at 3 m.
+- **P1 + P2 review (agent, 2026-11-26): 1 serious + 21 medium findings, fixed except where
+  noted.** Migration `party_review_fixes` (appended to `party/schema.sql`):
+  - **Serious, fixed:** the reaction channel was public, so anyone with the room code (even
+    without signing in) could send fake reactions. Now **all 3 channels are private**
+    (`config.private`) with RLS on `realtime.messages`: `rb-up-<room>` = members send, only the
+    host receives; `rb-db-<room>` = host only; `rb-room-<room>` = host and members. The sim now
+    sends forged reactions as a guest of another room and as an unsigned caller (private and
+    public topic): none reach the host.
+  - DB: names refuse control, zero-width, separator and bidi characters (`people_name_clean`;
+    `join_room` strips them; `RBNet.cleanName` does the same on the phone and counts code
+    points, so an emoji is never cut); `join_room` caps a room at 150 guests (errcode `P0003`,
+    "Стаята е пълна."); a vote update needs an open window on the old row too, and a trigger
+    keeps room/round/uid/side fixed (no moving a past vote); new RPC **`finish_vote(p_room)`**
+    sets `phase = 'results'` (so `vote_open` is false at once) and returns the tally with
+    names `{round, votes:[{uid, name, hidden, side, stars}], now}` — P5 uses it for the
+    who-rated-whom table instead of reading the votes at 0 s.
+  - Phone: failed reaction sends put the taps back; while live the totals are resent at
+    least every 5 s and once more when the phase leaves live (the host always gets the final
+    totals); one star upsert in flight per side (the latest tap wins, screen = DB); the wake
+    lock tracks its pending request; a rejoin does not stack feeds or timers; timestamps go
+    through `RBNet.parseTime` (6-digit fractions cut to 3 for Safari).
+  - Host: "Нова стая" makes the new room first and closes the old one after (a failed create
+    leaves the old room working); "Край на партито" retries once and keeps the party open with
+    an error if the room did not close; `resume()` and `start()` share the busy guard; the
+    host syncs its clock on connect (`syncNow()` via `touch_room`); the guest list merges by
+    uid (a live join during a reload is kept) and the chips update in place (focus and clicks
+    survive heartbeats); supabase-js and qrcode-generator load with **SRI hashes**
+    (`party.html` and the sim too).
+  - `.vercelignore` keeps `tests/` and `tools/` off the public site.
+  - Sim fixed: the "vote before the window" check now runs inside a started round (it used to
+    pass on the missing round). Re-run: **23/23 PASS** (tap → host median 62 ms, p95 222 ms;
+    ≈42 events/s with 20 phones; turn change 150 ms).
+  - Not done, accepted: no CAPTCHA on anonymous sign-ins (the 30/hour/IP limit is the
+    brake); late joiners can vote (no "joined before the round" rule); `SEND_MS` stays 800 ms
+    (16.3 said 500): at that rate about 45 phones tapping non-stop reach the free 100 events/s.
+  - Optional hardening for the user: Supabase dashboard → Realtime → Settings → turn off
+    **"Allow public access"**. All party channels are private now, so nothing breaks, and
+    public broadcasts to a room topic (which never reach the host) are refused outright.
+  - **P3 must:** drop reactions whose `uid` is not in `RB.party.people` or whose `round` is not
+    the current one, and use `finishVote()` for the results.
+- *P2 original brief:* the Парти button, the room, the QR overlay, names live, hide a name,
+  the mini QR, the party strip (format, turn length, names), "Нова стая", "Край на партито".
+- **P3 battles in the game — done 2026-11-26.** New `js/party-battle.js` (loads after
+  party-host.js) adds the game hooks to `RB.party`; `game.js` only calls them, guarded by
+  `G.party` (null without party mode): `beginGame(G, pattern)` after the chart is built (local
+  only), `decorate(rowsEl, G)` after `renderRows`, **`onStarted(G)` once the beat really plays**
+  (only then `start_round` / part 2 reach the phones, so a game that never starts makes no
+  round), `onCell(G, idx)` at the top of `onCell`, `header(G, idx, stall)` in `header()`,
+  `onEnd(G)` at the end of `endGame()`, `onStop(G, why)` in `stopEngine(fade, why)` (`why` =
+  `'restart'` from `startGame`, `'menu'` otherwise) and `onMenu()` in `toMenu()`.
+  - **Дует:** `side(bar)` from `turnBars` = max(strip setting, pattern cycle in bars); when the
+    pattern forces a longer turn, a toast says so. Rows get `side-L/R` (coloured row number +
+    a thin inner edge on the cells) and the first row of a turn shows the name. Header:
+    count-in "Започва ИВАН · N", then "Бар N / M" + "◀ ИВАН" / "МАРИЯ ▶", and "Следва МАРИЯ ▶" in
+    the last bar of a turn.
+  - **1 на 1:** part 1 = left (header "… · част 1/2"); at its end `phase = 'between'` and
+    "Играй пак" becomes "▶ <right> (дясно)"; that button starts part 2 (same settings, new
+    words, `phase = 'live', part = 2, turn = 'R'`). "Меню" between the parts cancels.
+  - Turns: the phones get the turn of the next bar on its last beat (one beat early); the
+    check runs on every cell a frame lands on, so skipped cells (slow frames, 2x speed) never
+    lose a turn change. The TV edge glow follows the bar the ball is in.
+  - Writes go through one queue (start_round first, then the patches), only for the room
+    they were queued for (not after "Нова стая" / "Край на партито", which also stop the
+    battle with a toast). A failed write logs, shows "Парти връзката се бави…" (max every
+    20 s) and a failed turn patch is resent on the next cell. `start_round` retries once.
+  - End: a finished battle saves `rounds.hype = {L, R, by: {uid: {L, R}}}` and sets
+    `phase = 'lobby'` (**P5 starts the vote here instead**). Exit mid-game, a game that
+    never started, "Меню" between 1v1 parts: `rounds.results = {cancelled: true}` (when the
+    round exists) and `phase = 'lobby'`. Names in the strip clear after a finished battle.
+  - **Reactions layer** `#partyFx` (fixed, `pointer-events: none`, hidden on the menu): side
+    edge glows (the rapping side bright; pulse at 10+ taps in 2 s), flying emoji in the side
+    zones (max 30 recycled nodes; more → "+N 🔥" bursts; none with reduced motion), the name
+    on a guest's first reaction of the battle and then on every 5th, hype calls "Залата
+    гори!" / "ОГЪН!" / "Неудържим!" at 50 / 150 / 300, a tug-of-war hype meter at the top.
+    Hidden layers recycle their nodes by hand (no `animationend` there).
+  - Reaction checks: the uid must be a guest of the room (an unknown uid is kept and
+    replayed after one people reload: a fresh guest's broadcast can beat its people row),
+    the round and the phase must match, the emoji must be one of the 5. Totals are monotonic
+    per guest and limited by a token bucket (8 points/s, 24 at once): Realtime does not prove
+    the uid in a payload, so a guest copying another guest's uid adds at most that.
+  - Verified (browser, 20 simulated phones tapping non-stop, synth 90 BPM, 8 bars): header
+    texts and row sides as above, turn L → R at bar 5 on the TV and the phones (also with
+    frames every 450 ms, i.e. skipped cells), saved hype = the phones' totals exactly (720/619
+    and 695/696), reaction handler median 0.4 ms / max 4.9 ms, 0 long tasks, frame cost
+    < 0.1 ms; 1v1 part 1 → between → part 2 → lobby; exit mid-game → cancelled + lobby;
+    "Меню" between parts → lobby; forged +1000 for another uid → +24; a game without party
+    mode is unchanged; no new console errors. **Not tested:** a real TV, real phones (needs
+    the deploy), SoundCloud beats in a battle (the hooks are beat-independent), 30 phones
+    (the sign-in limit allows about 30 new guests per hour from one IP; 20 were used).
+  - Reviewed by an agent: 14 medium findings, all fixed (listed in the session log).
+- *P3 original brief:* duet turns and 1v1 parts, row sides, header texts,
+  `state.turn`, reactions layer, hype meter, hype calls. Pass: no lost ball frames with 30
+  simulated phones tapping.
+- **P4 phone page:** join, lobby, live tap zones and emoji, between, vote, results, wake
+  lock, reconnect. Real test: 3 phones (Android + iPhone), on 4G and Wi-Fi, lock and unlock
+  during a song.
+- **P5 results:** vote phase with live columns and the live vote feed, the reveal, the
+  who-rated-whom table, top hypers, the session ranking, "История". Then a full party
+  rehearsal with real phones before 2026-12-20, so there is time for fixes before 2026-12-31.
 
 Estimate: P1 + P2 one session, P3 one session, P4 + P5 one or two sessions.
 
-### 16.9 Risks
+### 16.11 Risks
 
 | Risk | Plan |
 |---|---|
-| Weak Wi-Fi or 4G at the venue | Small messages (batched every 400 ms); test on 4G in P4; the game itself never waits for the network |
-| 100 connections limit | Fine for a house party. More guests → a paid Blaze plan or Supabase |
-| Bad words in names on the TV | 16-character limit, the host hides a name with one tap |
+| A free Supabase project pauses after 7 days without use | Run a test battle in the week before the party; open the dashboard on 2026-12-31 and check that the project is active |
+| Anonymous sign-in limit per IP (same Wi-Fi) | Kept at 30/hour by the user's choice: about 30 new phones per hour on one Wi-Fi; joined phones keep their session. Raise it in the dashboard if a party is bigger |
+| Weak Wi-Fi or 4G at the venue | Small, batched messages; test on 4G in P4; the game never waits for the network |
+| Realtime quotas | One subscriber per room on the busy channel; budget in 16.3; measured in P1 |
+| Bad words in names on the TV | 16-character limit; the host hides a name with one tap |
 | Tap spam decides the battle | Hype is only a tiebreak; the stars decide; taps capped at 6/s per phone |
+| Guests vote for a friend | Accepted: the votes are public, which keeps it honest and fun |
 | The QR points to a stale site | The party files must be on `main` (Vercel) before the party; the overlay shows the URL |
-| Phones fall asleep | Wake Lock during the song; reconnect redraws the phase from `state` |
+| Phones fall asleep | Wake Lock during the song; on wake the phone redraws from `rooms.state` |
 | Reactions make the ball stutter on the laptop | At most 30 nodes, transform/opacity only, merged bursts; checked in P3 |
 
-### 16.10 Decisions waiting for the user (the defaults above assume the first option)
+### 16.12 Decisions (user, 2026-11-26)
 
-1. **Backend:** Firebase (needs a free Google Firebase project) / Supabase / no account (PeerJS, risky).
-2. **Battle format:** rappers trade turns of 4 or 8 bars inside one song / each rapper raps
-   a whole song, one after the other (2 songs per battle).
-3. **Rating:** 1–5 stars for each rapper / one tap "who won?" (faster, less detail).
-4. **"Ranking" at the end:** battle result + top hypers + session ranking of rappers / only
-   the battle result.
-5. **Rapper names:** typed on the laptop / the rappers join on their own phones as players.
+1. Backend: **Supabase** (the user has an account).
+2. Battle format: **both**, "Дует" (turns inside one song) and "1 на 1" (full song against
+   full song), chosen per battle.
+3. Rating: **1–5 stars** for each rapper.
+4. Results show **who rated which rapper with what score** (16.6).
+5. Rapper names: **optional**. The host can type them; empty = "Играч 1" / "Играч 2". The
+   names reset after every battle unless "Същите рапъри" is on.
