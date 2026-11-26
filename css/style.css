@@ -70,6 +70,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-size: 18px; font-weight: 800; display: grid; place-items: center;
 }
 .icon-btn:hover { background: var(--panel-2); }
+.icon-btn.on { border-color: var(--gold); background: rgba(255, 201, 74, .16); }
+#tvBtn { font-size: 17px; }
+
+/* visible focus ring for keyboard users (section 12) */
+@supports selector(:focus-visible) { :focus { outline: none; } }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.beat-list li:focus-visible, .beat-list li.sel:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
 
 /* screens */
 .screen { display: none; position: relative; z-index: 1; }
@@ -113,6 +120,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .beat-info { min-width: 0; flex: 1; }
 .beat-title { font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .beat-meta { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fav {
+  flex: none; width: 34px; height: 34px; border-radius: 50%; border: 0; background: none;
+  color: var(--muted); font-size: 19px; line-height: 1; opacity: .55;
+}
+.fav:hover { opacity: 1; background: var(--panel); }
+.fav.on { color: var(--gold); opacity: 1; }
 .badge { font-size: 10.5px; font-weight: 800; color: var(--ink); background: var(--gold); border-radius: 6px; padding: 2px 6px; margin-left: 6px; }
 .list-state { color: var(--muted); padding: 16px 8px; text-align: center; }
 
@@ -348,12 +361,19 @@ details#adv h3 { font-size: 11px; letter-spacing: 1.4px; color: var(--muted); ma
 .tut-dots i.on { background: var(--gold); }
 .tut-text { font-family: var(--font-d); font-weight: 800; font-size: 19px; line-height: 1.35; margin: 0 0 4px; }
 .tut-sub { color: var(--muted); margin: 0 0 14px; }
-.tut-stage { position: relative; --rowH: 48px; --gap: 6px; padding-top: 56px; margin: 8px 0 6px; }
+/* --gap leaves room for the ball above the 2nd row */
+.tut-stage { position: relative; --rowH: 48px; --gap: 26px; padding-top: 56px; margin: 8px 0 0; min-height: 104px; }
+.tut-stage .row:nth-last-child(2) { margin-bottom: 4px; } /* the ball is the last child */
+.tut-stage .row { gap: 6px; }
+.tut-stage.intro { padding-top: 6px; min-height: 0; }
+.tut-hero { font-size: 64px; line-height: 1.2; }
 .tut-stage .row .lbl { display: none; }
+.tut-stage .row { transition: opacity .2s; }
+.tut-stage .row.past { opacity: .3; }
 .tut-ball {
   position: absolute; top: 0; left: 0; width: 20px; height: 20px; border-radius: 50%;
   background: radial-gradient(circle at 35% 35%, #fff6c8, var(--gold) 45%, var(--gold-2));
-  box-shadow: 0 0 14px var(--gold-2);
+  box-shadow: 0 0 14px var(--gold-2); pointer-events: none; will-change: transform; z-index: 2;
 }
 .skip-link { position: absolute; right: 18px; bottom: 14px; }
 

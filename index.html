@@ -15,6 +15,7 @@
 <header class="topbar">
   <button class="brand" id="brandBtn" aria-label="Към менюто"><span class="spark">✦</span><span class="b1">РИМО</span><span class="b2">БОЙ</span></button>
   <div class="top-actions">
+    <button id="tvBtn" class="icon-btn" aria-label="TV режим" title="TV режим (големи клетки)" aria-pressed="false">📺</button>
     <button id="helpBtn" class="icon-btn" aria-label="Как се играе" title="Как се играе">?</button>
     <button id="fsBtn" class="icon-btn" aria-label="Цял екран" title="Цял екран">⛶</button>
   </div>
@@ -223,7 +224,7 @@
 
 <div id="tutorial" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Как се играе">
   <div class="dialog" style="padding-bottom:48px">
-    <div class="tut-dots" id="tutDots"><i></i><i></i><i></i></div>
+    <div class="tut-dots" id="tutDots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <p class="tut-text" id="tutText"></p>
     <p class="tut-sub" id="tutSub"></p>
     <div class="tut-stage" id="tutStage"></div>
@@ -257,5 +258,6 @@
 <script src="js/rec.js"></script>
 <script src="js/game.js"></script>
 <script src="js/end.js"></script>
+<script src="js/tutorial.js"></script>
 </body>
 </html>

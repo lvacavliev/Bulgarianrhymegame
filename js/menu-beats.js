@@ -23,6 +23,23 @@
   };
   let sync = store.get('rb_sync', 0);
 
+  // favourites (M8): rb_favs = ["synth:<id>", "sc:<slug>"]; starred beats come first
+  const favsRaw = store.get('rb_favs', []);
+  const favs = new Set(Array.isArray(favsRaw) ? favsRaw.filter((x) => typeof x === 'string') : []);
+  const favKey = (src, id) => `${src}:${id}`;
+  const isFav = (src, id) => favs.has(favKey(src, id));
+  const favFirst = (items, src, idOf) => {
+    const on = [], off = [];
+    for (const it of items) (isFav(src, idOf(it)) ? on : off).push(it);
+    return on.concat(off);
+  };
+  function toggleFav(src, id) {
+    const k = favKey(src, id);
+    if (favs.has(k)) favs.delete(k); else favs.add(k);
+    store.set('rb_favs', [...favs]);
+    renderList(); // keeps the focus on the star
+  }
+
   // own file (M7): the decoded AudioBuffer lives in memory only; rb_fileBeat keeps
   // {name, bpm, offset}. guess = the values come from the automatic analysis.
   const fileSaved = store.get('rb_fileBeat', null) || {};
@@ -110,18 +127,34 @@
     if (src === 'sc' && SCW.state === 'idle') loadSC();
   }
 
-  function rowHTML(id, title, meta, coverStyle, coverText, badge) {
+  function rowHTML(id, title, meta, coverStyle, coverText, badge, favSrc) {
     const sel = state.sel.id === id ? ' sel' : '';
+    const fav = favSrc ? isFav(favSrc, id) : false;
+    const favLabel = fav ? 'Махни от любими' : 'Добави в любими';
+    const star = favSrc ? `<button class="fav${fav ? ' on' : ''}" aria-pressed="${fav}" aria-label="${favLabel}" title="${favLabel}">${fav ? '★' : '☆'}</button>` : '';
     return `<li data-id="${esc(id)}" class="${sel}" tabindex="0">
       <div class="cover" style="${coverStyle}">${coverText}</div>
       <div class="beat-info"><div class="beat-title">${esc(title)}${badge ? `<span class="badge">${badge}</span>` : ''}</div>
-      <div class="beat-meta">${esc(meta)}</div></div></li>`;
+      <div class="beat-meta">${esc(meta)}</div></div>${star}</li>`;
   }
 
+  // every re-render (also the background ones: SoundCloud 'tracks' / 'analysis' events)
+  // keeps the keyboard focus on the same row, or on its star
   function renderList() {
+    const a = document.activeElement;
+    const li = a && listEl.contains(a) ? a.closest('li[data-id]') : null;
+    const keep = li ? { id: li.dataset.id, fav: !!a.closest('.fav') } : null;
+    renderListHTML();
+    if (!keep) return;
+    const again = [...listEl.querySelectorAll('li[data-id]')].find((x) => x.dataset.id === keep.id);
+    const target = again && (keep.fav ? again.querySelector('.fav') : again);
+    if (target) target.focus({ preventScroll: true });
+  }
+
+  function renderListHTML() {
     if (state.src === 'synth') {
-      listEl.innerHTML = window.BEATS.map((d) => rowHTML(d.id, d.title, `Римобой · ${d.bpm} BPM · ${d.genre}`,
-        `background:${d.cover}`, d.emoji)).join('');
+      listEl.innerHTML = favFirst(window.BEATS, 'synth', (d) => d.id).map((d) => rowHTML(d.id, d.title, `Римобой · ${d.bpm} BPM · ${d.genre}`,
+        `background:${d.cover}`, d.emoji, '', 'synth')).join('');
     } else if (state.src === 'sc') {
       if (SCW.state === 'loading' || SCW.state === 'idle') {
         listEl.innerHTML = '<li class="list-state">Зареждам бийтовете от SoundCloud…</li>';
@@ -130,13 +163,13 @@
           <button class="btn-ghost" id="scRetry" style="margin-top:8px">Опитай пак</button></li>`;
       } else {
         const q = state.query.trim().toLowerCase();
-        const items = SCW.tracks.filter((t) => !q || t.title.toLowerCase().includes(q));
+        const items = favFirst(SCW.tracks.filter((t) => !q || t.title.toLowerCase().includes(q)), 'sc', (t) => t.slug);
         listEl.innerHTML = items.length ? items.map((t) => {
           const tempo = SCW.tempoFor(t.slug);
           const bpm = tempo && tempo.bpm;
           const meta = `Bizzle Beats · ${bpm ? bpmText(tempo) : fmt(t.durationMs / 1000)}${t.genre ? ' · ' + t.genre : ''}`;
           const cov = t.artwork ? `background-image:url('${esc(t.artwork)}')` : 'background:#ff7a45';
-          return rowHTML(t.slug, t.title, meta, cov, t.artwork ? '' : '🎧', bpm ? '' : 'Настрой темпо');
+          return rowHTML(t.slug, t.title, meta, cov, t.artwork ? '' : '🎧', bpm ? '' : 'Настрой темпо', 'sc');
         }).join('') : '<li class="list-state">Няма такъв бийт.</li>';
       }
     } else {
@@ -547,12 +580,26 @@
   listEl.addEventListener('click', (e) => {
     if (e.target.id === 'scRetry') { loadSC(); return; }
     const li = e.target.closest('li[data-id]');
+    if (li && e.target.closest('.fav')) { toggleFav(state.src, li.dataset.id); return; }
     if (li && li.dataset.id === '__load') { fileInput.click(); return; }
     if (li) select(state.src, li.dataset.id);
   });
   listEl.addEventListener('keydown', (e) => {
     const li = e.target.closest('li[data-id]');
-    if (li && e.key === 'Enter') { if (li.dataset.id === '__load') fileInput.click(); else select(state.src, li.dataset.id); }
+    if (!li) return;
+    // up / down arrows move between the rows (section 12)
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const rows = [...listEl.querySelectorAll('li[data-id]')];
+      const to = rows[rows.indexOf(li) + (e.key === 'ArrowDown' ? 1 : -1)];
+      if (to) { e.preventDefault(); to.focus(); }
+      return;
+    }
+    if (e.target.closest('.fav')) return; // Enter on the star = its own click
+    if (e.key === 'Enter') {
+      const id = li.dataset.id;
+      if (id === '__load') { fileInput.click(); return; }
+      select(state.src, id); // renderList keeps the focus on the row
+    }
   });
   $('#previewBtn').addEventListener('click', () => { taps = []; return state.preview ? stopPreview() : startPreview(); });
 
