@@ -280,7 +280,9 @@
       S.setVolume(1);
       S.owner = this;
       await S.play(this.track.index, this.fromMs);
-      if (this.stopped) throw new Error('stopped');
+      // stopped while loading: stop() paused too early, so the track started anyway. Pause it,
+      // unless a newer engine already owns the widget (stop() cleared S.owner for this one)
+      if (this.stopped) { if (!S.owner) S.pause(); throw new Error('stopped'); }
       this.anchor(S.lastPos, S.lastProgPerf);
       this.running = true;
       return 0; // t0: time() is already relative to the first count-in cell

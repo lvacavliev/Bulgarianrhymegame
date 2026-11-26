@@ -2,7 +2,7 @@
    beat list, "ТВОЯТ БИЙТ" preview card, tempo box with tap tempo, sync slider.
    Exposes window.RB.beats for the game (M5):
      current()     → { src, title, meta, cover, emoji, link, bpm, durationSec, ready, reason }
-     makeEngine()  → SynthBeat | SCBeat (FileBeat in M7)
+     makeEngine()  → SynthBeat | SCBeat | FileBeat (own file, M7)
      stopPreview()
    Loads after app.js (needs window.RB). */
 (function () {
@@ -22,6 +22,23 @@
     raf: 0,
   };
   let sync = store.get('rb_sync', 0);
+
+  // own file (M7): the decoded AudioBuffer lives in memory only; rb_fileBeat keeps
+  // {name, bpm, offset}. guess = the values come from the automatic analysis.
+  const fileSaved = store.get('rb_fileBeat', null) || {};
+  const file = {
+    buffer: null,
+    name: typeof fileSaved.name === 'string' ? fileSaved.name : null,
+    bpm: Number.isFinite(fileSaved.bpm) ? fileSaved.bpm : null,
+    offset: Number.isFinite(fileSaved.offset) && fileSaved.offset >= 0 ? fileSaved.offset : 0,
+    guess: !!fileSaved.guess,
+    loading: false,
+  };
+  const FILE_COVER = '#9d8bff';
+  const fileOk = () => !!file.buffer && file.bpm >= 60 && file.bpm <= 200;
+  const saveFile = () => store.set('rb_fileBeat', { name: file.name, bpm: file.bpm, offset: file.offset, guess: file.guess });
+  const round2 = (x) => Math.round(x * 100) / 100;
+  const fileMeta = () => `Твой файл · ${fileOk() ? `${file.guess ? '~' : ''}${round2(file.bpm)} BPM` : 'темпо?'}`;
 
   const fmt = (sec) => {
     sec = Math.max(0, Math.floor(sec));
@@ -51,7 +68,18 @@
         ready: !!bpm, reason: bpm ? null : 'Задай темпото (BPM) на този бийт: тапни в ритъм.',
         track: t, tempo };
     }
-    return { src: sel.src, title: 'Твой файл', meta: '', ready: false, reason: 'Идва скоро (M7).' };
+    // own file
+    if (!file.buffer) {
+      return { src: 'file', id: 'file', title: file.name || 'Твой файл', cover: FILE_COVER, emoji: '📁',
+        meta: file.name ? 'Зареди файла отново' : 'Зареди аудио файл', bpm: null, durationSec: null, ready: false,
+        reason: file.name ? 'Зареди файла отново в „Твой файл“: след презареждане браузърът го забравя.' : 'Зареди аудио файл в „Твой файл“.' };
+    }
+    const ok = fileOk();
+    return { src: 'file', id: 'file', title: file.name, cover: FILE_COVER, emoji: '📁',
+      meta: fileMeta(),
+      bpm: ok ? file.bpm : null, durationSec: Math.max(0, file.buffer.duration - file.offset),
+      ready: ok, reason: ok ? null : 'Задай темпото на файла (BPM 60–200): тапни в ритъм.',
+      buffer: file.buffer, offset: file.offset };
   }
 
   // "~90 BPM" = a guess (waveform fallback, or a measurement the analysis flagged); measured
@@ -66,6 +94,10 @@
     const c = current();
     if (c.src === 'synth') return new window.SynthBeat(c.def);
     if (c.src === 'sc') return new window.SCBeat(c.track, c.tempo, sync, opts || {});
+    if (c.src === 'file' && c.ready) {
+      // the sync slider works for files too (negative = ball earlier)
+      return new window.FileBeat(c.buffer, c.bpm, c.offset + sync / 1000, { leadSec: ((opts && opts.leadMs) || 0) / 1000 });
+    }
     return null;
   }
 
@@ -108,7 +140,18 @@
         }).join('') : '<li class="list-state">Няма такъв бийт.</li>';
       }
     } else {
-      listEl.innerHTML = '<li class="list-state">Качване на твой файл идва скоро (M7).</li>';
+      const cov = `background:${FILE_COVER}`;
+      let html = '';
+      if (file.loading) html += '<li class="list-state">Чета файла…</li>';
+      else if (file.buffer) {
+        html += rowHTML('file', file.name, `${fileMeta()} · ${fmt(file.buffer.duration)}`, cov, '📁', fileOk() ? '' : 'Настрой темпо');
+      } else if (file.name) {
+        html += rowHTML('__load', 'Зареди файла отново', file.name, cov, '📁');
+      }
+      if (!file.loading && (file.buffer || !file.name)) {
+        html += rowHTML('__load', '＋ Твой бийт', 'MP3, WAV, M4A… от устройството', 'background:var(--panel-2)', '＋');
+      }
+      listEl.innerHTML = html;
     }
   }
 
@@ -122,9 +165,22 @@
     const link = $('#nowLink');
     link.classList.toggle('hidden', !c.link);
     if (c.link) link.href = c.link;
-    $('#nowDur').textContent = c.src === 'sc' && c.track ? fmt(c.track.durationMs / 1000) : '';
+    $('#nowDur').textContent = c.src === 'sc' && c.track ? fmt(c.track.durationMs / 1000)
+      : c.src === 'file' && file.buffer ? fmt(file.buffer.duration) : '';
     $('#recNote').classList.toggle('hidden', !(c.src === 'sc' && $('#recBtn').getAttribute('aria-pressed') === 'true'));
     renderTempoBox(c);
+    renderFileBox(c);
+  }
+
+  function renderFileBox(c) {
+    const show = c.src === 'file' && !!file.buffer;
+    $('#fileBox').classList.toggle('hidden', !show);
+    if (!show) return;
+    if (document.activeElement !== $('#fileBpm')) $('#fileBpm').value = file.bpm ? round2(file.bpm) : '';
+    if (document.activeElement !== $('#fileOffset')) $('#fileOffset').value = file.offset.toFixed(2);
+    $('#fileAuto').textContent = file.guess
+      ? `Предположение от файла: ~${round2(file.bpm)} BPM, начало ${file.offset.toFixed(2)} с. Може да греши: чуй началото или тапни.`
+      : '';
   }
 
   function renderTempoBox(c) {
@@ -178,6 +234,11 @@
         return;
       }
       if (state.preview !== eng) return;
+    } else if (c.src === 'file' && file.buffer) {
+      A.ensure();
+      const eng = new window.FileBeat(file.buffer, file.bpm || 120, 0, { fromSec: fromMs != null ? fromMs / 1000 : 0 });
+      eng.start(A.ctx.currentTime + 0.05);
+      state.preview = eng;
     } else {
       return;
     }
@@ -187,6 +248,11 @@
       if (state.preview !== eng) return;
       if (eng.isSC) {
         const pos = window.SCW.position() / 1000, dur = c.track.durationMs / 1000;
+        $('#nowPos').textContent = fmt(pos);
+        $('#nowProg').style.width = `${Math.min(100, (pos / dur) * 100)}%`;
+      } else if (eng.isFile) {
+        const pos = eng.position(), dur = eng.buffer.duration;
+        if (pos >= dur) { stopPreview(); return; }
         $('#nowPos').textContent = fmt(pos);
         $('#nowProg').style.width = `${Math.min(100, (pos / dur) * 100)}%`;
       } else {
@@ -303,6 +369,7 @@
   let taps = [];
   function tap() {
     const c = current();
+    if (c.src === 'file') { tapFile(); return; }
     const btn = $('#tapBtn');
     btn.classList.add('flash');
     setTimeout(() => btn.classList.remove('flash'), 90);
@@ -329,11 +396,45 @@
     renderList();
     renderNow();
   }
+  // own file: the same line fit; the first tap = "Начало" (bar 1), the file clock is exact
+  function tapFile() {
+    const btn = $('#fileTapBtn');
+    btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 90);
+    if (!file.buffer) return;
+    if (!state.preview || !state.preview.isFile) {
+      toast('Пусни файла с ▶ и тапни на първия удар, после на всеки удар.');
+      return;
+    }
+    const pos = state.preview.position() * 1000, now = performance.now();
+    if (taps.length && now - taps[taps.length - 1].perf > 2000) taps = [];
+    taps.push({ pos, perf: now });
+    if (taps.length > 64) taps.shift();
+    if (taps.length < 4) { btn.textContent = `Тапни първия удар и ритъма · ${taps.length}…`; return; }
+    const { bpm, dropMs, keptKnown, ok } = fitTaps(taps.map((t) => t.pos), file.guess ? file.bpm : null);
+    const n = taps.length;
+    if (!ok) { btn.textContent = `Тапите са неравни (${n}): тапни пак, без да пропускаш удари`; return; }
+    // taps on every half beat (or every other beat): fold into 60–200
+    let bpmF = bpm;
+    while (bpmF > 200) bpmF /= 2;
+    while (bpmF < 60) bpmF *= 2;
+    if (!(bpmF >= 60 && bpmF <= 200)) { btn.textContent = `Темпото ${Math.round(bpm)} BPM е извън 60–200: тапни на всеки удар`; return; }
+    if (!keptKnown) file.bpm = round2(bpmF);
+    file.offset = dropMs / 1000;
+    file.guess = false;
+    saveFile();
+    btn.textContent = `Начало ${file.offset.toFixed(2)} с · ${round2(file.bpm)} BPM (${n} тапа)`;
+    renderList();
+    renderNow();
+  }
+  $('#fileTapBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); tapFile(); });
+  $('#fileTapBtn').addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); tapFile(); } });
+
   // pointerdown, not click: a click fires on release, which is late for a tap
   $('#tapBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); tap(); });
   $('#tapBtn').addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); tap(); } });
   document.addEventListener('keydown', (e) => {
-    if (window.RB.screen !== 'menu' || e.repeat || e.target.matches('input, select, textarea')) return;
+    if (window.RB.screen !== 'menu' || e.repeat || (e.target.matches && e.target.matches('input, select, textarea'))) return;
     if (e.code === 'KeyT') tap(); // physical T key = tap (works on Bulgarian layouts too)
   });
 
@@ -359,6 +460,80 @@
     catch (e) { window.prompt('Копирай това:', text); }
   });
 
+  // ---------- own file: load, guess, inputs ----------
+  const fileInput = $('#fileInput');
+  const MAX_BYTES = 80e6, MAX_SEC = 600; // a decoded 10-min stereo file is ~230 MB of PCM
+  let loadTok = 0;
+  async function loadFile(f) {
+    if (!f) return;
+    if (f.size > MAX_BYTES) { toast('Файлът е твърде голям (до 80 MB).', 3500); return; }
+    const my = ++loadTok; // only the last picked file counts
+    stopPreview();
+    file.loading = true;
+    state.sel = { src: 'file', id: 'file' };
+    store.set('rb_beatSel', state.sel);
+    if (state.src !== 'file') setTab('file'); else renderList();
+    renderNow();
+    let buffer = null;
+    try {
+      const ctx = A.ensure();
+      const data = await f.arrayBuffer();
+      buffer = await ctx.decodeAudioData(data);
+    } catch (e) {
+      if (my !== loadTok) return;
+      file.loading = false;
+      renderList(); renderNow();
+      toast('Този файл не става: опитай MP3, WAV или M4A.', 3500);
+      return;
+    }
+    if (my !== loadTok) return;
+    if (buffer.duration > MAX_SEC) {
+      file.loading = false;
+      renderList(); renderNow();
+      toast('Файлът е твърде дълъг (до 10 минути).', 3500);
+      return;
+    }
+    const same = file.name === f.name && file.bpm;
+    file.buffer = buffer;
+    file.loading = false;
+    if (!same) {
+      // a new file: guess the BPM and the first downbeat from its envelope (RBDrop)
+      file.name = f.name;
+      file.offset = 0; file.bpm = null; file.guess = false;
+      try {
+        const g = window.RBDrop.analyze(window.RBFile.envelope(buffer, Math.min(30000, Math.round(buffer.duration / 0.02))), buffer.duration * 1000);
+        if (g.bpm >= 60 && g.bpm <= 200) { file.bpm = round2(g.bpm); file.guess = true; }
+        if (g.dropMs > 0 && g.dropMs < buffer.duration * 1000) file.offset = g.dropMs / 1000;
+      } catch (e) { /* no guess: the player taps */ }
+    }
+    saveFile();
+    taps = [];
+    renderList();
+    renderNow();
+    startPreview();
+  }
+  fileInput.addEventListener('change', () => { const f = fileInput.files && fileInput.files[0]; fileInput.value = ''; loadFile(f); });
+  $('#fileReplace').addEventListener('click', () => fileInput.click());
+  $('#fileStartBtn').addEventListener('click', () => {
+    if (!file.buffer) return;
+    taps = [];
+    startPreview(Math.max(0, file.offset - 4) * 1000);
+  });
+  $('#fileBpm').addEventListener('change', () => {
+    const v = parseFloat($('#fileBpm').value);
+    file.bpm = v >= 60 && v <= 200 ? v : null;
+    if (!file.bpm) toast('BPM трябва да е между 60 и 200.');
+    file.guess = false;
+    saveFile(); renderList(); renderNow();
+  });
+  $('#fileOffset').addEventListener('change', () => {
+    const v = parseFloat($('#fileOffset').value);
+    const max = file.buffer ? file.buffer.duration : Infinity;
+    file.offset = Number.isFinite(v) && v >= 0 && v < max ? v : 0;
+    file.guess = false;
+    saveFile(); renderList(); renderNow();
+  });
+
   // ---------- sync slider ----------
   const syncRange = $('#syncRange');
   syncRange.value = sync;
@@ -372,17 +547,19 @@
   listEl.addEventListener('click', (e) => {
     if (e.target.id === 'scRetry') { loadSC(); return; }
     const li = e.target.closest('li[data-id]');
+    if (li && li.dataset.id === '__load') { fileInput.click(); return; }
     if (li) select(state.src, li.dataset.id);
   });
   listEl.addEventListener('keydown', (e) => {
     const li = e.target.closest('li[data-id]');
-    if (li && e.key === 'Enter') select(state.src, li.dataset.id);
+    if (li && e.key === 'Enter') { if (li.dataset.id === '__load') fileInput.click(); else select(state.src, li.dataset.id); }
   });
   $('#previewBtn').addEventListener('click', () => { taps = []; return state.preview ? stopPreview() : startPreview(); });
 
   // ---------- init ----------
   if (state.sel.src === 'synth' && !window.BEATS.find((b) => b.id === state.sel.id)) state.sel = { src: 'synth', id: window.BEATS[0].id };
-  setTab(state.src === 'file' ? 'synth' : state.src);
+  if (state.sel.src === 'file') state.sel = { src: 'file', id: 'file' };
+  setTab(state.src);
   renderNow();
 
   window.RB.beats = { current, makeEngine, stopPreview, fitTaps, get sync() { return sync; } };

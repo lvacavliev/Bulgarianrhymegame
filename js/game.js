@@ -150,6 +150,9 @@
       const after = (endMs - drop) / 1000;
       return Math.max(4, Math.floor(after / cellDur / 4 + 1e-6)); // epsilon: endMs is a whole bar
     }
+    if (beat.src === 'file' && engine && engine.isFile) {
+      return Math.max(4, Math.floor(engine.afterRap / (4 * cellDur) + 1e-6));
+    }
     return 64;
   }
 
@@ -171,6 +174,7 @@
     if (window.RB.end) window.RB.end.cleanup(); // end-screen popups/confetti
     stopEngine(0.05); // short fade: "Играй пак" must not overlap two beats
     window.RB.beats.stopPreview();
+    window.RB.rec.revoke(); // the last recording's blob URL
     const my = ++token;
     const S = window.RB.settings.get();
     const beat = window.RB.beats.current();
@@ -178,7 +182,18 @@
     const cellDur = 60 / beat.bpm / speed;
     // SoundCloud: the count-in ends exactly on the beat drop (SCBeat leadMs)
     const engine = window.RB.beats.makeEngine({ leadMs: COUNT_CELLS * cellDur * 1000 });
-    const bars = barsFor(beat, cellDur, S.duration, engine);
+    // an own file needs at least 4 bars after its start
+    if (beat.src === 'file' && engine && engine.afterRap < 16 * cellDur - 1e-6) {
+      toast('Файлът е твърде кратък след началото: нужни са поне 4 бара.', 3500);
+      toMenu();
+      return;
+    }
+    let bars = barsFor(beat, cellDur, S.duration, engine);
+    // an own file can be shorter than the chosen length: play only the bars it has
+    if (beat.src === 'file' && engine && S.duration !== 'full') {
+      const fit = Math.floor(engine.afterRap / (4 * cellDur) + 1e-6);
+      if (fit < bars) { bars = fit; toast(`Файлът стига за ${fit} бара.`); }
+    }
     const list = window.RB.settings.list();
     const chart = Chart.buildChart(bars, window.RB.settings.pattern(), list, window.RB.settings.fill());
 
@@ -204,12 +219,34 @@
 
     if (!engine) { toast('Този бийт още не става за игра.'); toMenu(); return; }
     G.engine = engine;
+    G.rec = false;
+    if (S.rec) {
+      // ask for the mic before the beat starts; no mic → play without REC
+      setHead('Пригответе се!', 'Микрофон…');
+      let recOk = false;
+      try {
+        await window.RB.rec.prepare();
+        recOk = true;
+      } catch (e) {
+        if (my === token) {
+          toast(e && e.message === 'unsupported'
+            ? 'Този браузър не може да записва: играем без запис.'
+            : 'Няма достъп до микрофона: играем без запис.', 3500);
+        }
+      }
+      // left during the mic prompt: stopEngine already discarded (and rec.js drops a late mic)
+      if (my !== token || !G || G.engine !== engine) return;
+      G.rec = recOk;
+      setHead('Пригответе се!', engine.isSC ? 'Зарежда…' : '');
+    }
     try {
       if (engine.isSC) {
         engine.onExternalPause = () => { if (G && G.engine === engine && !G.paused && !G.ended) pause(true); };
         await engine.start();
       } else {
         A.ensure();
+        // REC: the recorder starts in the same task, 0.15 s before the count-in
+        if (G.rec) startRec();
         engine.start(A.ctx.currentTime + 0.15);
       }
     } catch (e) {
@@ -220,8 +257,20 @@
     }
     if (my !== token || !G || G.engine !== engine) { engine.stop(0); return; }
     G.starting = false;
+    if (G.rec && engine.isSC) startRec(); // SoundCloud: once the track really plays
     G.raf = requestAnimationFrame(loop);
     if (G.pendingPause || document.hidden) { G.pendingPause = false; pause(); }
+  }
+
+  function startRec() {
+    try {
+      window.RB.rec.start();
+      $('#recBadge').classList.remove('hidden');
+    } catch (e) {
+      G.rec = false;
+      window.RB.rec.discard();
+      toast('Записът не тръгна: играем без запис.');
+    }
   }
 
   // ---------- pause / resume / exit ----------
@@ -231,6 +280,7 @@
     G.paused = true;
     cancelAnimationFrame(G.raf);
     if (G.engine.isSC) { if (!fromSC) G.engine.pause(); } else if (A.ctx) A.ctx.suspend();
+    if (G.rec) window.RB.rec.pause();
     $('#pauseBtn').textContent = '▶';
     $('#pauseBtn').setAttribute('aria-label', 'Продължи');
     $('#pauseOv').classList.remove('hidden');
@@ -241,6 +291,7 @@
     if (!G || !G.paused) return;
     G.paused = false;
     if (G.engine.isSC) G.engine.resume(); else if (A.ctx) A.ctx.resume();
+    if (G.rec) window.RB.rec.resume();
     $('#pauseBtn').textContent = '❚❚';
     $('#pauseBtn').setAttribute('aria-label', 'Пауза');
     $('#pauseOv').classList.add('hidden');
@@ -250,6 +301,8 @@
   function stopEngine(fade = 0.2) {
     if (!G) return;
     cancelAnimationFrame(G.raf);
+    // exit mid-game (also during the mic prompt): no recording, mic released
+    if (!G.ended) window.RB.rec.discard();
     if (G.engine) G.engine.stop(fade);
     if (A.ctx && A.ctx.state === 'suspended') A.ctx.resume();
     G.ended = true;
@@ -260,13 +313,14 @@
     token++;
     if (window.RB.end) window.RB.end.cleanup();
     stopEngine();
+    $('#recBadge').classList.add('hidden');
     $('#pauseOv').classList.add('hidden');
     showScreen('menu');
   }
 
   function exitGame() {
     if (!G) { toMenu(); return; }
-    if (G.settings.rec && !G.ended && !G.starting) {
+    if (G.rec && !G.ended && !G.starting) {
       const wasPaused = G.paused;
       if (!wasPaused) pause();
       if (!window.confirm('Да прекратим ли играта?')) { if (!wasPaused) resume(); return; }
@@ -280,6 +334,8 @@
     cancelAnimationFrame(G.raf);
     if (G.litEl) G.litEl.classList.remove('lit');
     G.engine.setVolume(0.5, 1);
+    G.recP = G.rec ? window.RB.rec.stop() : null; // → {blob, url, ext} | null (end.js shows it)
+    $('#recBadge').classList.add('hidden');
     showScreen('end');
     if (window.RB.onGameEnd) window.RB.onGameEnd(G);
   }

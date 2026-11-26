@@ -6,15 +6,15 @@
 
 ---
 
-## START HERE (handoff for a new session, updated after M6, 2026-11-26)
+## START HERE (handoff for a new session, updated after M7, 2026-11-26)
 
-**Status:** M0–M6 done (including M3a). **Next: M7, REC recording + own file beat.** Then
-M8 (tutorial, polish), M9 (more words), M10 (full test).
+**Status:** M0–M7 done (including M3a). **Next: M8, tutorial overlay + polish** (favourites,
+keyboard, reduced motion, TV mode). Then M9 (more words), M10 (full test).
 
 **Read in this order:** this section → section 14 (the checklist, with implementation notes
 under each finished milestone: *the code is the source of truth where they differ from
-sections 4–9*) → section 10 (REC), 8.6 (FileBeat), 7.3 ("＋ Твой бийт" box), 7.5 (record
-card), 8A.5 (REC with SoundCloud = mic only).
+sections 4–9*) → section 7.2 (tutorial copy), 12 (keyboard, accessibility, reduced motion),
+6 (look), 11 (`rb_tutorialDone`, `rb_favs`).
 
 **Run / test:**
 - Dev server: preview config `rimoboy` in `.claude/launch.json` (= `python serve.py 8080`,
@@ -28,6 +28,14 @@ card), 8A.5 (REC with SoundCloud = mic only).
 - **The preview pane is often hidden → rAF is throttled and screenshots are stale.** Drive
   frames by hand with `RB.game.frame()` (draws one frame now) when testing sync. An 8-bar
   synth game lasts about 27 s: wait, then call `RB.game.frame()` once to trigger the end.
+  A hidden pane also fires `visibilitychange`, which pauses the game: check `G.paused`.
+- **Own file without a file dialog:** build a WAV in the page and hand it to the input:
+  `const dt = new DataTransfer(); dt.items.add(new File([wavArrayBuffer], 'x.wav')); fileInput.files = dt.files; fileInput.dispatchEvent(new Event('change'))`.
+  A click track (100 BPM, quiet 4.8 s intro, loud beats after) was guessed as 100 BPM,
+  start 4.78 s.
+- **REC without a real mic:** replace `navigator.mediaDevices.getUserMedia` with a function
+  that returns `RBAudio.ctx.createMediaStreamDestination().stream` fed by an oscillator, or
+  one that throws `new DOMException('x', 'NotAllowedError')` for the denied path.
 
 **What exists (globals, all on `window`):**
 
@@ -40,7 +48,9 @@ card), 8A.5 (REC with SoundCloud = mic only).
 | `RB.toMenu()` | game.js | stops the engine (also the quiet end-screen beat), resumes a suspended ctx, shows the menu |
 | `RB.game` | game.js | `state` (= `G`: `{engine, beat, settings, cellDur, bars, chart, list, total, playSec, cells, ended, paused, ...}`, null when no game), `pause()`, `resume()`, `exit()`, `frame()` |
 | `RB.onGameEnd(G)` | end.js | called by game.js `endGame()` after `showScreen('end')`: stats, streak, recap, beat card, popups, confetti |
-| `RB.end` | end.js | `bumpStreak()` → `{count, changed}`, `openDict(word, famId)`, `cleanup()` (game.js calls it in `toMenu`/`startGame`), `confetti()` |
+| `RB.end` | end.js | `bumpStreak()` → `{count, changed}`, `openDict(word, famId)`, `cleanup()` (game.js calls it in `toMenu`/`startGame`), `confetti()`, `shown` (the game whose end screen is shown) |
+| `RB.rec` | rec.js | `prepare()` (mic), `start()`, `pause()`, `resume()`, `stop()` → `Promise<{blob, url, ext, mime} \| null>`, `discard()`, `revoke()`, `recording` |
+| `FileBeat`, `RBFile` | filebeat.js | own-file engine (`isFile`, `position()`, `afterRap`, `rapStart`); `RBFile.envelope(buffer, bins)` for `RBDrop.analyze` |
 | `WORD_LISTS`, `PATTERNS` (+`byId`) | words.js, patterns.js | data |
 | `Chart` | chart.js | `buildChart`, `renderRows(el, chart, {countinRows, revealAll, tap})`, `fitCells(el)`, `FamilyBag`, `shuffle` |
 | `RBAudio` | audio.js | `ensure()`, `ctx`, `master`, `recDest` (compressor → MediaStreamDestination, live ctx only), `latency()`, `makeOutput`, `buffers`, `mtof` |
@@ -51,35 +61,20 @@ card), 8A.5 (REC with SoundCloud = mic only).
 `time()` (latency-corrected, seconds since the first count-in cell), `setVolume(v, ramp)`,
 `stop(fade)`. Pause: synth `RBAudio.ctx.suspend()/resume()`; SC `engine.pause()/resume()`.
 
-**M7 brief (REC + own file beat):**
-1. **FileBeat** (section 8.6): a new class (in beats.js, or a new `js/filebeat.js` loaded
-   before menu-beats.js) with the engine interface above. Pause = `ctx.suspend()` like the
-   synth. It plays through master, so it reaches `recDest`.
-2. **"Твой файл" tab** in menu-beats.js. Today `current()` returns `ready:false,
-   reason:'Идва скоро (M7).'` for `src:'file'`, and the start-up code (line ~385) never
-   restores the file tab. Add a hidden `<input type=file accept="audio/*">`, decode the file,
-   a BPM input (60–200) + "Тапни темпото" (reuse the existing tap-tempo code), "Начало (сек)"
-   (first downbeat) and the help text from 7.3. Save `rb_fileBeat {name, bpm, offset}`.
-   After a reload, show "Зареди файла отново" (the AudioBuffer is not stored).
-   `current()` for a file: title = file name, meta `Твой файл · N BPM`, `durationSec` =
-   buffer duration (game.js `barsFor` uses it for "Цялата песен"), `ready` only when a
-   buffer and a BPM exist.
-3. **REC** (section 10): when `G.settings.rec` is on, ask for the mic in `startGame()`
-   *before* the engine starts. A denied mic → toast, and the game plays without REC.
-   `micSrc → gain 1.3 → recDest`, never to the speakers. `MediaRecorder(recDest.stream)`,
-   mime type per section 10. Start it when the count-in starts and show `#recBadge`
-   (game.js `fillPlayer` hides it). Stop it in `endGame()` → blob → `#recCard`
-   (`#recAudio.src`, `#recDl.href`, `download = rimoboy-YYYY-MM-DD-HHMM.webm`, or `.m4a`
-   for mp4). Stop the mic tracks. Exit mid-game → discard the recording. Revoke the previous
-   blob URL on a new game. With SC beats the recording is mic only (8A.5; `#recNote`
-   already says so). Hide `#recCard` again when a game without REC ends (end.js
-   `onGameEnd` is the place to toggle it).
-4. Verify: the file beat plays in the preview and in the game, with the ball on the grid
-   (test with a generated WAV click track at a known BPM, made in the scratchpad and not
-   committed); "Цялата песен" with a file; REC with a synth beat gives a playable blob with
-   sound (check `blob.size`, decode it with `decodeAudioData`); mic denied → the game still
-   plays; exit during REC → no record card; 360 px; no console errors. Then tick M7 in
-   section 14 and add a session log entry.
+**M8 brief (tutorial + polish):**
+1. **Tutorial** (section 7.2): `#tutorial` overlay markup and CSS exist (`#tutDots`,
+   `#tutText`, `#tutSub`, `#tutStage`, `#tutNext`, `#tutSkip`; `.tut-stage`, `.tut-ball`).
+   4 slides, the CSS ball bounces across 4 demo cells at 90 BPM, rhyme cells `рима`/`зима`.
+   Show it on the first visit (`rb_tutorialDone`), reopen it with `#helpBtn` (today
+   app.js shows a toast "Обучението идва скоро (M8)."). Esc = skip. Focus trap.
+2. **Favourites** (`rb_favs`, beat ids): a star on each beat row; favourites first.
+3. **Keyboard** (section 12): check Enter on beat rows, `P` = play, Space/Esc in the game,
+   Esc in every modal, visible focus rings. The `T` key taps tempo (SC and own file).
+4. **Reduced motion:** no ball trail (done), no confetti (done), no star twinkle (done):
+   add the tutorial ball and the row scroll.
+5. **TV mode:** `body.tv` CSS exists (`--rowH: 84px`). Add a toggle (for example a `📺`
+   button in the top bar or `?tv` in the URL), saved in localStorage.
+6. Verify, tick M8 in section 14, add a session log entry.
 
 **Beat data for SoundCloud (reworked 2026-11-24, section 8A.7):** BPM, beat drop and end
 of every Bizzle Beats track are **measured offline from the audio** (`tools/analyze_sc.py`,
@@ -320,6 +315,8 @@ rhyme game bulgarian/
 ├── tools/            ← dev only: analyze_sc.py (offline audio analysis), bake-sc-tracks.js, sc-analysis.json
 ├── config.js         ← window.RB_CONFIG = {scClientId:''}; optional, git-ignored, never commit a secret
 ├── js/chart.js       ← buildChart(), FamilyBag (section 4)
+├── js/filebeat.js    ← FileBeat: the user's own audio file (section 8.6)
+├── js/rec.js         ← REC: mic + MediaRecorder (section 10)
 ├── js/game.js        ← game loop, grid render, ball (section 9)
 ├── js/end.js         ← end screen, streak, rhyme dictionary (sections 7.5–7.7, 9.5)
 └── js/app.js         ← menu, settings, modals, screens, tutorial, streak (sections 6, 7, 11)
@@ -1247,7 +1244,15 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
   - Beat card `#eCover/#eTitle/#eMeta/#eLink` (the speed is appended to the meta; the SoundCloud link shows only for SC beats).
   - CSS: at ≤860 px the 3 stats sit in one row, so the word recap starts higher on a phone.
   - Verified (session 10): synth "Софийски нощи" 90 BPM, 8 bars → 0:21, 8 recap rows, 8 tap words; streak with `last` = yesterday and count 3 → 4, and the "4 поредни дни!" popup closes after 2.5 s; same day again → stays 4, no streak popup; `bumpStreak` edge cases (none, old date, yesterday, today, junk); dictionary: рой → бой (chip) → прибой ("Още рими"), Esc closes it; "Играй пак" → new words, popups cleared; "Меню" → `G` null, beat stopped; fake 88 BPM → 0:22; blank chart → hint hidden; 360 px: no horizontal scroll, 0 overflowing words (min font 11 px); no console errors. `node tests/data-check.js .` prints OK.
-- [ ] **M7** REC recording + user file beat (tap tempo, offset, full song)
+- [x] **M7** REC recording + user file beat (tap tempo, offset, full song) (session 10)
+  - New **`js/filebeat.js`** (after beats.js): `FileBeat(buffer, bpm, offsetSec, {leadSec, fromSec})`. **Timing differs from 8.6 on purpose:** "Начало" is bar 1 of the rapping (like the SoundCloud drop), and the 2-bar count-in plays just before it. When the file has less than a count-in before "Начало", bar 1 moves on by whole bars, so the grid stays on the beat (`rapStart`, `fileStart`). `time()` = seconds since the first count-in cell (latency-corrected); `position()` = file seconds heard now. Pause = `ctx.suspend()` like the synth. `afterRap` = seconds of music after bar 1: "Цялата песен" = `floor(afterRap / bar)` bars; a fixed length longer than the file is cut to the bars the file has (toast "Файлът стига за N бара.").
+  - The sync slider applies to files too (`offset + sync`).
+  - **"Твой файл" tab** (menu-beats.js): rows "＋ Твой бийт" (opens the hidden `#fileInput`) and the loaded file; after a reload, "Зареди файла отново" (the AudioBuffer is not stored; the same file name keeps its saved BPM and start). A new file is decoded and analysed: `RBFile.envelope` (20 ms peak bins) → `RBDrop.analyze` guesses the BPM and the first downbeat (shown with "~" and a "Предположение от файла" note). `#fileBox`: "Тапни темпото" (the same `fitTaps` line fit as SoundCloud; first tap = start; also the `T` key), `BPM` (60–200), `Начало (сек)`, "▶ Чуй началото" (plays from 4 s before), "Зареди друг файл". Saved in `rb_fileBeat {name, bpm, offset, guess}`. `current()` is `ready` only with a buffer and a BPM in 60–200.
+  - New **`js/rec.js`** (`RB.rec`, before game.js). `prepare()`: `getUserMedia` (no echo cancellation, noise suppression or AGC) → gain 1.3 → `RBAudio.recDest` (never the speakers). A generation counter makes a mic that arrives after `discard()` or a newer `prepare()` stop itself. `start()`: `MediaRecorder(recDest.stream)`, mime `audio/webm;codecs=opus` > `audio/webm` > `audio/mp4` > `audio/ogg;codecs=opus`, 1 s chunks kept per recorder. `stop()` releases the mic at once (not in `onstop`, where a new game may already own a new mic).
+  - game.js: with REC on, `startGame()` asks for the mic before the beat starts (header "Микрофон…"). Denied or unsupported → toast, the game plays without REC (`G.rec = false`). The recorder starts with the count-in and `#recBadge` shows; pause/resume pause the recorder; `stopEngine()` discards a recording of a game that did not end (exit, also during the mic prompt); `endGame()` sets `G.recP = RB.rec.stop()`. The exit confirm now depends on `G.rec` (a real recording), not on the setting. `startGame()` revokes the previous blob URL.
+  - end.js: `#recCard` is hidden on every end screen and shown only when `G.recP` resolves while that game's end screen is still shown. `#recAudio.src` + `#recDl` (`rimoboy-YYYY-MM-DD-HHMM.webm`, `.m4a` for mp4). While the recording plays, the quiet end-screen beat goes to 0; pause/end → back to 0.5.
+  - Agent review fixes (session 10): a stale SoundCloud start (stopped while loading) now pauses the widget when no newer engine owns it (soundcloud.js, also hit the menu preview); the last picked file wins when two files load at once (`loadTok`); files over 80 MB or 10 minutes are refused; a file with fewer than 4 bars after its start → toast "Файлът е твърде кратък…" and back to the menu; a negative start from the sync slider keeps its bar phase (`offset mod bar`); tapped BPMs are folded into 60–200 (×2 / ÷2); for synth and file beats the recorder starts in the same task as the beat (0.15 s before the count-in); a recording that finishes after the player left the end screen is revoked. Speed ≠ 1 keeps the music tempo (cells are half or double beats), the same as for synth and SoundCloud.
+  - Verified (session 10) with a generated 100 BPM WAV (quiet 4.8 s intro): guess 100 BPM / 4.78 s; preview + progress; game 8 bars, `fileStart` 0, `rapStart` 4.8 s; pause freezes `time()`; "Цялата песен" → 14 bars (35.2 s after the start); reload → "Зареди файла отново", reload of the same file keeps 100 BPM / 4.80 s; tap tool via the `T` key (9 taps, one beat skipped) → 100 BPM. REC with a fake mic (440 Hz): a 24.8 s `audio/webm;codecs=opus` blob, decodes, has sound; the card and the download name show; playing it mutes the beat (gain 0.45 → 0 → 0.45); "Играй пак" with REC records again; exit during REC → no card, mic track `ended`; mic denied → toast "Няма достъп до микрофона: играем без запис.", the game plays, no card. Synth game still starts and runs. 360 px: no horizontal scroll. **Not tested:** a real microphone (the preview browser has none), iOS/Safari `audio/mp4`, SoundCloud + REC (mic only by design).
 - [ ] **M8** Tutorial overlay, favourites, keyboard, reduced motion, TV mode
 - [ ] **M9** Word list expansion: each list 40+ families; add 4+ theme lists (5.3 "Lists to add later"); stress review
   - Done early (2026-11-24, on the user's request): the 6 existing lists grew to newyear 400, mic 400, food 400, hard 401 words. Then, on the user's review, `basic` was pruned to simple words of 1–2 syllables (273 words, 50 families) and `two` to words of exactly 2 syllables (156 words, 32 families). Families left with fewer than 4 words were removed. Keep these two rules when adding words: `basic` = common, 1–2 syllables; `two` = exactly 2 syllables, stress on the first. Stress errors fixed: `отвори/затвори/умори/повтори` (stressed on the next-to-last syllable) left the end-stressed family; `пари` (end-stressed) left `two`; `имам` left `food`; `баса` replaced. Words can repeat across lists (only one list is checked for duplicates). Still open: the new theme lists. Section 5.3 shows the old drafts; `js/words.js` is the source of truth.
@@ -1314,3 +1319,7 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
   section 14): stats, streak + popup, confetti, recap, dictionary navigation, "Играй пак",
   "Меню", 360 px, no console errors. Fixed one bug found in the test (the streak popup closed
   at once). **Next: M7** (REC + own file beat).
+- **2026-11-26, session 10 (later):** M7 done (`js/filebeat.js`, `js/rec.js`, the "Твой
+  файл" tab in menu-beats.js, REC in game.js, the record card in end.js). Verified with a
+  generated WAV and a fake mic (see the M7 notes in section 14). Reviewed by an agent (1 serious + 5 medium findings fixed, re-tested).
+  **Next: M8** (tutorial + polish).

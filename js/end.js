@@ -247,8 +247,43 @@
     else { link.removeAttribute('href'); link.classList.add('hidden'); }
   }
 
+  // ---------- recording card (M7) ----------
+  const recCard = $('#recCard'), recAudio = $('#recAudio'), recDl = $('#recDl');
+  let shownG = null; // the game whose end screen is shown
+  const pad = (n) => String(n).padStart(2, '0');
+  const stamp = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+
+  function hideRec() {
+    recCard.classList.add('hidden');
+    recAudio.pause();
+    recAudio.removeAttribute('src');
+    recAudio.load();
+    recDl.removeAttribute('href');
+  }
+
+  function showRec(G) {
+    hideRec();
+    if (!G.recP) return;
+    G.recP.then((r) => {
+      if (shownG !== G) { if (r) window.RB.rec.revoke(); return; } // the player already left
+      if (!r) { window.RB.toast('Записът е празен.'); return; }
+      recAudio.src = r.url;
+      recDl.href = r.url;
+      recDl.download = `rimoboy-${stamp(new Date())}.${r.ext}`;
+      recCard.classList.remove('hidden');
+    });
+  }
+
+  // while the recording plays, the quiet end-screen beat goes silent
+  const beatVol = (v) => { const g = window.RB.game.state; if (g && g === shownG && g.engine) g.engine.setVolume(v, 0.3); };
+  recAudio.addEventListener('play', () => beatVol(0));
+  recAudio.addEventListener('pause', () => beatVol(0.5));
+  recAudio.addEventListener('ended', () => beatVol(0.5));
+
   // ---------- entry point (called by game.js endGame) ----------
   function onGameEnd(G) {
+    shownG = G;
+    showRec(G);
     $('#stDur').textContent = fmt(G.playSec);
     $('#stBars').textContent = String(G.bars);
     const st = bumpStreak();
@@ -264,6 +299,8 @@
 
   // leaving the end screen (game.js toMenu / startGame call this): drop popups + confetti
   function cleanup() {
+    shownG = null;
+    hideRec();
     pendingStreak = null;
     clearTimeout(popTimer);
     popup.classList.add('hidden');
@@ -273,5 +310,5 @@
   }
 
   window.RB.onGameEnd = onGameEnd;
-  window.RB.end = { bumpStreak, openDict, cleanup, confetti };
+  window.RB.end = { bumpStreak, openDict, cleanup, confetti, get shown() { return shownG; } };
 })();

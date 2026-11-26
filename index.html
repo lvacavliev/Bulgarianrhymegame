@@ -45,6 +45,16 @@
         <p class="full"><button id="tempoAutoBtn" class="link hidden">Върни автоматичните</button> <button id="tempoExportBtn" class="link">Копирай моите настройки</button></p>
       </div>
 
+      <div id="fileBox" class="tempo-box hidden">
+        <button id="fileTapBtn" class="btn-ghost full tap-big">Тапни темпото</button>
+        <p class="full">Пусни файла с ▶. Тапни (или натисни <b>T</b>) на първия силен удар и после на всеки удар, поне 8 пъти. Начало = секундата на първия удар: оттам почва първият бар на рапа.</p>
+        <label>BPM<input id="fileBpm" type="number" min="60" max="200" step="0.25"></label>
+        <label>Начало (сек)<input id="fileOffset" type="number" min="0" step="0.01"></label>
+        <button id="fileStartBtn" class="btn-ghost">▶ Чуй началото</button>
+        <p class="full" id="fileAuto"></p>
+        <p class="full"><button id="fileReplace" class="link">Зареди друг файл</button></p>
+      </div>
+
       <div class="now-card">
         <div class="now-label">ТВОЯТ БИЙТ</div>
         <div class="now-row">
@@ -236,6 +246,7 @@
 <script src="js/patterns.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/beats.js"></script>
+<script src="js/filebeat.js"></script>
 <script src="js/sc-tracks.js"></script>
 <script src="js/drop.js"></script>
 <script src="js/soundcloud.js"></script>
@@ -243,6 +254,7 @@
 <script src="js/app.js"></script>
 <script src="js/menu-beats.js"></script>
 <script src="js/menu-words.js"></script>
+<script src="js/rec.js"></script>
 <script src="js/game.js"></script>
 <script src="js/end.js"></script>
 </body>
