@@ -6,15 +6,16 @@
 
 ---
 
-## START HERE (handoff for a new session, updated after M7, 2026-11-26)
+## START HERE (handoff for a new session, updated after M9, 2026-11-26)
 
-**Status:** M0–M7 done (including M3a). **Next: M8, tutorial overlay + polish** (favourites,
-keyboard, reduced motion, TV mode). Then M9 (more words), M10 (full test).
+**Status:** M0–M9 done (including M3a). **Next: M10, full test pass** (section 13) + fixes.
+The party is on 2026-12-31.
+**Also scoped (2026-11-26), not built:** party mode, section 16 (QR join, phone voting, live
+reactions, ranking). Its milestones P0–P5 wait for the user's decisions in 16.10.
 
 **Read in this order:** this section → section 14 (the checklist, with implementation notes
 under each finished milestone: *the code is the source of truth where they differ from
-sections 4–9*) → section 7.2 (tutorial copy), 12 (keyboard, accessibility, reduced motion),
-6 (look), 11 (`rb_tutorialDone`, `rb_favs`).
+sections 4–9*) → section 13 (the test list).
 
 **Run / test:**
 - Dev server: preview config `rimoboy` in `.claude/launch.json` (= `python serve.py 8080`,
@@ -41,7 +42,8 @@ sections 4–9*) → section 7.2 (tutorial copy), 12 (keyboard, accessibility, r
 
 | Global | File | What it gives |
 |---|---|---|
-| `RB` | app.js | `$`, `store.get/set` (safe localStorage), `showScreen('menu'\|'game'\|'end')`, `toast(msg, ms)`, `openModal(id)`, `closeModal(id)`, `screen` (current) |
+| `RB` | app.js | `$`, `store.get/set` (safe localStorage), `showScreen('menu'\|'game'\|'end')`, `toast(msg, ms)`, `openModal(id)` (focuses the first button), `closeModal(id)` (gives the focus back), `focusables(el)`, `screen` (current). Tab is trapped in the top open `.overlay` |
+| `RB.tutorial` | tutorial.js | `open(slide)`, `close()`, `go(±1)`, `at(beats)` (draws the demo ball at that beat; for tests), `slide` |
 | `RB.beats` | menu-beats.js | `current()` → `{src:'synth'\|'sc'\|'file', title, meta, cover, artwork, emoji, link, bpm, durationSec, ready, reason, def?, track?, tempo?}`; `makeEngine()`; `stopPreview()`; `sync` (ms) |
 | `RB.settings` | menu-words.js | `get()` → `{listId, fill, duration, patternId, speed, blank, rec}`; `list()`; `pattern()`; `fill()`; `speedFactor()`; `speedLabel()` |
 | `RB.startGame()` | game.js | async; builds the chart, renders, starts the engine, runs the loop. "Играй пак" calls it too |
@@ -61,20 +63,16 @@ sections 4–9*) → section 7.2 (tutorial copy), 12 (keyboard, accessibility, r
 `time()` (latency-corrected, seconds since the first count-in cell), `setVolume(v, ramp)`,
 `stop(fade)`. Pause: synth `RBAudio.ctx.suspend()/resume()`; SC `engine.pause()/resume()`.
 
-**M8 brief (tutorial + polish):**
-1. **Tutorial** (section 7.2): `#tutorial` overlay markup and CSS exist (`#tutDots`,
-   `#tutText`, `#tutSub`, `#tutStage`, `#tutNext`, `#tutSkip`; `.tut-stage`, `.tut-ball`).
-   4 slides, the CSS ball bounces across 4 demo cells at 90 BPM, rhyme cells `рима`/`зима`.
-   Show it on the first visit (`rb_tutorialDone`), reopen it with `#helpBtn` (today
-   app.js shows a toast "Обучението идва скоро (M8)."). Esc = skip. Focus trap.
-2. **Favourites** (`rb_favs`, beat ids): a star on each beat row; favourites first.
-3. **Keyboard** (section 12): check Enter on beat rows, `P` = play, Space/Esc in the game,
-   Esc in every modal, visible focus rings. The `T` key taps tempo (SC and own file).
-4. **Reduced motion:** no ball trail (done), no confetti (done), no star twinkle (done):
-   add the tutorial ball and the row scroll.
-5. **TV mode:** `body.tv` CSS exists (`--rowH: 84px`). Add a toggle (for example a `📺`
-   button in the top bar or `?tv` in the URL), saved in localStorage.
-6. Verify, tick M8 in section 14, add a session log entry.
+**M10 brief (full test pass):**
+1. Go through section 13 item by item in the preview browser (`?offline` for item 16's
+   fallback). Note PASS/FAIL per item in the M10 notes of section 14.
+2. Items the agent cannot do (needs ears, a real mic, a phone, a TV, Safari/iOS): write
+   them as a short checklist for the user (what to do, what to listen for), at the top of
+   the M10 notes. The user tests them at home before the party.
+3. Fix what fails. `node tests/data-check.js .` must still print `OK`.
+4. Optional: a short "Как се играе" help text for SoundCloud limits (section 8A.5) if it is
+   missing.
+5. Tick M10, add a session log entry.
 
 **Beat data for SoundCloud (reworked 2026-11-24, section 8A.7):** BPM, beat drop and end
 of every Bizzle Beats track are **measured offline from the audio** (`tools/analyze_sc.py`,
@@ -319,6 +317,7 @@ rhyme game bulgarian/
 ├── js/rec.js         ← REC: mic + MediaRecorder (section 10)
 ├── js/game.js        ← game loop, grid render, ball (section 9)
 ├── js/end.js         ← end screen, streak, rhyme dictionary (sections 7.5–7.7, 9.5)
+├── js/tutorial.js    ← tutorial overlay (section 7.2)
 └── js/app.js         ← menu, settings, modals, screens, tutorial, streak (sections 6, 7, 11)
 ```
 
@@ -1142,7 +1141,8 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
 | `rb_tutorialDone` | `"1"` |
 | `rb_streak` | `{last:"YYYY-MM-DD", count:n}`. Date = `new Date().toLocaleDateString('sv')` (local). Same day: no change; yesterday: +1; otherwise: 1 |
 | `rb_fileBeat` | `{name, bpm, offset}` |
-| `rb_favs` | array of beat ids (M8) |
+| `rb_favs` | array of `"synth:<id>"` / `"sc:<slug>"` (M8) |
+| `rb_tv` | `true` / `false`: TV mode (M8) |
 
 ---
 
@@ -1253,10 +1253,23 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
   - end.js: `#recCard` is hidden on every end screen and shown only when `G.recP` resolves while that game's end screen is still shown. `#recAudio.src` + `#recDl` (`rimoboy-YYYY-MM-DD-HHMM.webm`, `.m4a` for mp4). While the recording plays, the quiet end-screen beat goes to 0; pause/end → back to 0.5.
   - Agent review fixes (session 10): a stale SoundCloud start (stopped while loading) now pauses the widget when no newer engine owns it (soundcloud.js, also hit the menu preview); the last picked file wins when two files load at once (`loadTok`); files over 80 MB or 10 minutes are refused; a file with fewer than 4 bars after its start → toast "Файлът е твърде кратък…" and back to the menu; a negative start from the sync slider keeps its bar phase (`offset mod bar`); tapped BPMs are folded into 60–200 (×2 / ÷2); for synth and file beats the recorder starts in the same task as the beat (0.15 s before the count-in); a recording that finishes after the player left the end screen is revoked. Speed ≠ 1 keeps the music tempo (cells are half or double beats), the same as for synth and SoundCloud.
   - Verified (session 10) with a generated 100 BPM WAV (quiet 4.8 s intro): guess 100 BPM / 4.78 s; preview + progress; game 8 bars, `fileStart` 0, `rapStart` 4.8 s; pause freezes `time()`; "Цялата песен" → 14 bars (35.2 s after the start); reload → "Зареди файла отново", reload of the same file keeps 100 BPM / 4.80 s; tap tool via the `T` key (9 taps, one beat skipped) → 100 BPM. REC with a fake mic (440 Hz): a 24.8 s `audio/webm;codecs=opus` blob, decodes, has sound; the card and the download name show; playing it mutes the beat (gain 0.45 → 0 → 0.45); "Играй пак" with REC records again; exit during REC → no card, mic track `ended`; mic denied → toast "Няма достъп до микрофона: играем без запис.", the game plays, no card. Synth game still starts and runs. 360 px: no horizontal scroll. **Not tested:** a real microphone (the preview browser has none), iOS/Safari `audio/mp4`, SoundCloud + REC (mic only by design).
-- [ ] **M8** Tutorial overlay, favourites, keyboard, reduced motion, TV mode
-- [ ] **M9** Word list expansion: each list 40+ families; add 4+ theme lists (5.3 "Lists to add later"); stress review
+- [x] **M8** Tutorial overlay, favourites, keyboard, reduced motion, TV mode (session 10)
+  - New **`js/tutorial.js`** (loads last). 4 slides with the copy of 7.2 plus own sub lines; 4 step dots; "Пропусни" hidden on the last slide. The demo ball is drawn with JS + rAF (not a CSS animation): it lands on the top edge of cell b at beat b (90 BPM, 667 ms), arcs to the next cell, lights the cell for 20 % of the beat, and the row it has left is dimmed (like the game). Slide 2/3 use 2 rows with a 26 px gap so the ball fits above row 2. Reduced motion: the ball jumps from cell to cell (no arc). Shown on the first visit (`rb_tutorialDone` = `"1"`, set on skip, Esc or "Към играта"); `#helpBtn` reopens it from slide 0. Opening it during a game pauses the game (Space resumes after). Keys: Esc = skip, ← / → = slide; a capture-phase listener stops every other key handler (P, T, Space) while it is open.
+  - **Modals (app.js):** `openModal` remembers the focused element and focuses the first button; `closeModal` gives the focus back (or blurs a hidden button). One Tab trap for the top open `.overlay` (list modal, dictionary, popup, pause, tutorial). `[data-close]` and backdrop clicks go through `closeModal`.
+  - **Favourites** (menu-beats.js): a ☆/★ button on every synth and SoundCloud row (`aria-pressed`, "Добави в любими" / "Махни от любими"); starred rows come first (order otherwise kept). `rb_favs` = `["synth:<id>", "sc:<slug>"]` (the source prefix keeps ids unique). The star does not select the row; the focus stays on the star after the re-render.
+  - **Keyboard:** ↑ / ↓ move between beat rows; Enter selects and keeps the focus on the row; `P` play, `T` tap, Space/Esc in the game were already there. Global `:focus-visible` ring (2 px gold); `:focus` without keyboard shows no ring.
+  - **TV mode:** `📺` button in the top bar (`#tvBtn`, `aria-pressed`, toast), saved in `rb_tv`; `?tv` / `?tv=0` in the URL set it. Still automatic in fullscreen at 1600 px or more. A change fires a `resize` event, so game.js and end.js re-fit the words and re-measure the ball.
+  - Review fixes (agent review after M8): every `renderList()` (also the background SoundCloud `tracks`/`analysis` re-renders) keeps the keyboard focus on the same row or star; a non-array `rb_favs` no longer breaks menu-beats.js; opening the tutorial stops a menu preview (other tempo than the 90 BPM demo); closing it drops a pause that was only queued while the beat was still starting (`G.pendingPause`), and gives the focus to "Продължи" when the pause overlay is open; TV off while fullscreen ≥ 1600 px says that TV mode stays; `:focus { outline: none }` only where `:focus-visible` is supported.
+  - Verified (session 10): first load shows the tutorial, the second load does not; Enter/→/Tab/Shift+Tab/Esc; P is blocked while it is open; "Пропусни" returns the focus to `?`; ball landing x/y = cell centre / cell top on all 8 beats; opened during a game → paused, Space presses the tutorial button and the game stays paused; star → first in the list, saved after reload, row not selected; ↓ ↓ Enter selects the 3rd row with the focus kept; P starts the game; TV on → `--rowH` 84 px, ball columns re-measured, TV off during the game → 64 px re-measured; 360 px: no horizontal scroll, tutorial fits; no new console errors. **Not tested:** a real `prefers-reduced-motion` setting (code path only), a TV.
+- [x] **M9** Word list expansion: each list 40+ families; add 4+ theme lists (5.3 "Lists to add later"); stress review (session 10)
+  - 4 new theme lists at the end of `RAW` in `js/words.js`: **`love`** 💘 Любов и раздяла (41 families), **`city`** 🌃 Градски нощи (40), **`money`** 💰 Бачкане и пари (42), **`nature`** 🌳 Природа (41). 11 lists in the picker (with "Микс", 496 families). For a final stressed open vowel the consonant before it matches too (`-та́`, `-на́`, `-ни́`…), and no two families of one list share a rhyme.
+  - Stress review (own pass + an agent review). Removed or replaced: basic ви́но; newyear the палто́/ма́нто/ло́то/пла́то family, гра́ници, о́чи + мечти́ (among -чи́), другари́ (among -а́ри), the нощ/мощ/разкош family (-ош ≠ -ощ), безкрая; food змия́, ви́но, синтеза → антитеза, та́ва, the нали́вай/разли́вай family → -а́й words, со́лен/пе́чен/ва́рен, я́дем; two the стари/фари family (фари is not a standard plural; 3 words left); hard Я́пония. In the new lists the review caught о́чи, раздели́, пари́/другари́ among -а́ри, ра́бота, къ́ртица, ку́кувица, сняг (= -а́к, merged with мак…), the цвете/плете́ family, ствол (Russian).
+  - Kept on purpose: near rhymes in two (`ясно гласно властно страстно`, the т is silent), food (`танц шанс…`) and newyear (`танци шанси…`); the mixed-consonant families with a final stressed е/и (food `кюфте кафе…`, `пюре фрапе…`, newyear `искри звъни…`). **UNSURE, check at ibl.bas.bg:** клаксо́н (city), па́ра "steam" (two `гара пара…`).
+  - basic (50) and two (31) were not grown: the good one- and two-syllable rhymes are used up; the theme lists add the volume. The lists were not heard in a real game by a Bulgarian speaker: **the user should play one game with each new list.**
+  - Verified: `node tests/data-check.js .` OK; buildChart for every pattern × 64 bars on the 4 new lists (no word repeat in a group); list modal shows 11 lists; picking Природа rebuilds the preview; the dictionary for кукувица (before the fix) found "Още рими" across lists.
   - Done early (2026-11-24, on the user's request): the 6 existing lists grew to newyear 400, mic 400, food 400, hard 401 words. Then, on the user's review, `basic` was pruned to simple words of 1–2 syllables (273 words, 50 families) and `two` to words of exactly 2 syllables (156 words, 32 families). Families left with fewer than 4 words were removed. Keep these two rules when adding words: `basic` = common, 1–2 syllables; `two` = exactly 2 syllables, stress on the first. Stress errors fixed: `отвори/затвори/умори/повтори` (stressed on the next-to-last syllable) left the end-stressed family; `пари` (end-stressed) left `two`; `имам` left `food`; `баса` replaced. Words can repeat across lists (only one list is checked for duplicates). Still open: the new theme lists. Section 5.3 shows the old drafts; `js/words.js` is the source of truth.
 - [ ] **M10** Full test pass (section 13) + fixes; optional: publish as a shareable page
+- [ ] **P0–P5** Party mode: QR join, live reactions, audience vote, ranking (section 16.8; scoped 2026-11-26, waits for the decisions in 16.10)
 
 ---
 
@@ -1323,3 +1336,259 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
   файл" tab in menu-beats.js, REC in game.js, the record card in end.js). Verified with a
   generated WAV and a fake mic (see the M7 notes in section 14). Reviewed by an agent (1 serious + 5 medium findings fixed, re-tested).
   **Next: M8** (tutorial + polish).
+- **2026-11-26, session 10 (M8):** M8 done (`js/tutorial.js`, focus handling and TV toggle
+  in app.js, favourites and arrow keys in menu-beats.js, focus ring + tutorial CSS). Verified
+  in the browser (see the M8 notes in section 14). **Next: M9** (word lists).
+- **2026-11-26, session 10 (M9):** M9 done (4 theme lists, stress fixes in the old lists).
+  Two agent reviews (M8 code, M9 words); all confident findings fixed (see the M8 and M9
+  notes in section 14). **Next: M10** (full test pass).
+- **2026-11-26, session 11:** Scoped party mode (section 16, milestones P0–P5). No code.
+  The decisions in 16.10 wait for the user. **Next: M9** (word lists), unchanged.
+
+---
+
+## 16. Party mode (Парти режим): audience voting from phones (scoped 2026-11-26, not built)
+
+### 16.1 Goal
+
+Two rappers battle on one beat. Player 1 stands on the **left** of the screen, player 2 on
+the **right**, as the audience sees them. The host taps one button. A QR code appears on the
+TV. People scan it, type a name, and their phone becomes a remote with a left half and a
+right half. During the song they send reactions that fly up on that side of the TV and fill
+a hype meter. When the song ends, they rate both rappers, and the ranking builds up live on
+the TV.
+
+**Design rule: ease of use first.** One tap on the laptop, one scan, one name, no app, no
+account for the audience. Everything else is optional.
+
+### 16.2 Architecture (recommended: Firebase Realtime Database)
+
+The site is static on Vercel. Vercel functions cannot keep WebSockets open, and the phones
+are on other networks (4G, guest Wi-Fi), so a hosted realtime service must relay the
+messages. **Recommendation: Firebase Realtime Database (free Spark plan) + Anonymous Auth**,
+loaded from the official `firebase-*-compat.js` scripts (plain `<script>` tags, no modules,
+no npm; pin an exact version in P1).
+
+Why this service:
+- No server code. One small rules file (16.6) is all the backend.
+- **State, not only messages.** Names, votes and hype counts are stored under the room. A
+  phone that locks its screen, reloads or joins late reads the current state at once. A host
+  that reloads the page loses nothing. A broadcast-only service (Supabase Realtime, Ably,
+  PeerJS) needs extra resync code for every one of these cases.
+- Writes reach only the listeners of that path. The phones do not receive the other phones'
+  taps, so the traffic grows linearly with the audience.
+- The Spark plan has no billing at all: at the limit it stops, it never charges.
+- Limits that matter: **100 simultaneous connections per database** (all rooms together),
+  10 GB download per month. A house party fits. A club does not.
+
+Alternatives, in case the user does not want a Google project: Supabase Realtime (broadcast
++ presence; 200 connections free, but resync and fan-out must be hand-made, and a free
+project pauses after a week without use); PeerJS WebRTC with the laptop as the hub (no
+account, but phones on 4G behind strict NAT fail without a TURN server: too risky for a
+party).
+
+**The host is the authority.** Only the host laptop writes the room `state` (phase, round,
+names, turn, results). The phones write only their own entries. The host computes every
+result.
+
+**Unique link per session.** Room id = 6 characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`
+(no 0/O/1/I), made with `crypto.getRandomValues` (32^6 ≈ 1 billion). Link:
+`<PARTY_BASE>/party.html?r=K7P3QX`. Rooms are separate database paths, so any number of
+sessions can run at the same time on different laptops. The room id is the secret: the rules
+forbid listing `/rooms`.
+
+**Public base URL.** The phones cannot open `localhost`. `PARTY_BASE` = `location.origin`
+when the page is served over https from a non-local host (the Vercel site). Otherwise it is
+the deployed Vercel URL from `js/party-config.js`. So the host can run the game from
+`start.bat`, and the QR still points to the live site. The party files must be deployed
+(a push to `main`) before the party.
+
+**Constraint 3 exception:** party mode needs internet on the laptop and on every phone. The
+rest of the app keeps working offline. Without a connection or without the config, the
+Парти button shows the toast "Парти режимът иска интернет." and nothing else changes.
+
+### 16.3 Data model
+
+```
+rooms/{roomId}
+  meta:   {hostUid, created}                        // written once, by the host
+  state:  {phase, round, left, right, turnBars,     // host only
+           turn: 'L'|'R'|null, voteEndsAt, results}
+          phase: 'lobby' | 'live' | 'vote' | 'results' | 'closed'
+          round: 'r1', 'r2', ... (string; one round = one song = one battle)
+          left / right: rapper names (defaults "Играч 1" / "Играч 2")
+  people/{uid}:            {name, joinedAt, seenAt}  // each phone, own uid only
+  hype/{round}/{uid}:      {L: n, R: n}              // own running totals (idempotent set)
+  votes/{round}/{uid}:     {L: 1-5, R: 1-5, at}      // own only, only while phase = 'vote'
+  reactions/{pushId}:      {uid, side, emoji, n, at} // fire-and-forget; the host deletes them
+```
+
+- `uid` = the Anonymous Auth user id. The browser keeps it, so the same phone rejoins as the
+  same person (name, votes and hype stay).
+- Times use the server clock (`firebase.database.ServerValue.TIMESTAMP` and
+  `.info/serverTimeOffset`), so the vote countdown agrees on every device.
+- Results: `{L: {avg, n}, R: {avg, n}, winner: 'L'|'R'|'tie', hype: {L, R}, topHypers: [{name, n}]}`.
+
+### 16.4 Host side (laptop, `index.html`)
+
+**Button.** `🎉 Парти` in the top bar (next to `📺`). The first tap creates the room (the
+room id is kept in `sessionStorage`, so a reload keeps the same room) and opens the party
+overlay.
+
+**Party overlay** (works on a TV at 3 m):
+- A large QR code (about 60 % of the screen height), title "Сканирай и гласувай!", under it
+  the short URL and the code `K7P3QX` in big letters (for people who type it).
+- "Влезли: N" and the names as chips that pop in when people join. The host can tap a chip
+  to hide a name (bad words): the person stays in the vote, and the TV no longer shows the
+  name.
+- Rapper names: two inputs "Ляво" / "Дясно" (defaults "Играч 1" / "Играч 2").
+- Turn length: "Смяна на всеки: 4 бара | 8 бара" (default 4).
+- Buttons "Затвори" (party stays on), "Нова стая" (new code), "Край на партито"
+  (`phase = 'closed'`, the phones show "Партито свърши. Благодарим!").
+
+**Mini QR.** While party mode is on, a small QR with the code stays in a corner of the menu,
+game and end screens, so late guests can join. A tap opens the big overlay again. It can be
+hidden.
+
+**Battle in the game** (changes in `game.js`, only when party mode is on):
+- The rappers take turns: `side(bar) = floor((bar - 1) / turnBars) % 2 === 0 ? 'L' : 'R'`.
+  `turnBars` = max(setting, pattern cycle in bars), so a rhyme cycle (for example AA_A,
+  8 bars) is never split between two rappers.
+- Rows get the class `side-L` / `side-R`: a coloured glow on the left or right edge of the
+  row and a small name label. The left and right colours are new tokens, not rhyme colours.
+- Header during the count-in: "Започва ИВАН". In the last bar of a turn: "Следва МАРИЯ ▶".
+- The host writes `state.turn` only when the turn changes, never per frame.
+- The game calls the new hooks `RB.party.onStart(G)` and `RB.party.onTurn(side)`. The
+  existing `RB.onGameEnd(G)` starts the vote. The beat timing code does not change.
+
+**Reactions layer** `#partyFx` (over the game and end screens, `pointer-events: none`):
+- Emoji float up in the left or right edge zone, so they do not cover the grid. Animate only
+  `transform` and `opacity` (the ball loop must not drop frames). At most 30 nodes at a time,
+  recycled. Above that, the host merges them into one burst ("+12 🔥").
+- One reaction in five shows the sender's name, and so does the first reaction of each
+  person in a round ("Петя 🔥").
+- **Hype meter:** a thin tug-of-war bar under the header, left colour against right colour,
+  share of this round's hype points.
+- **Hype calls**, to push the crowd: at 50 / 150 / 300 points on a side a big short text
+  flashes on that side ("Залата гори!", "ОГЪН!", "Неудържим!"). When one side has 10 or more
+  taps in 2 s, its edge pulses.
+- No sound effects (they would get into the REC recording and clash with the beat).
+
+**Vote and results** (end screen, after "Страхотни барове!"):
+- `phase = 'vote'`, `voteEndsAt` = now + 20 s. The TV shows "Гласувайте сега!" with a big
+  countdown and two columns (left name, right name). The average stars and the vote count of
+  each column grow **live** as the votes arrive.
+- At 0: the host reads the votes, writes `results`, and `phase = 'results'`. Reveal: the
+  winner's column grows, "ПОБЕДИТЕЛ: ИВАН" (or "Равенство!"), confetti (`RB.end.confetti()`).
+- Ranking: winner = the higher average of stars. Tie on the average → the higher hype total.
+  Still a tie → "Равенство!". Hype alone never wins.
+- Under it: **"Топ хайпъри"** (the 3 audience names with the most taps) and the **session
+  ranking** of rappers by name over all rounds of the room (wins, then the average stars).
+- "Играй пак" starts the next round (`round` + 1, the same rapper names, they can swap
+  sides). "Меню" puts the room back in `lobby`.
+
+### 16.5 Phone side (`party.html`, own small page)
+
+Bulgarian, the same "midnight party" look, no menu, works at 360 px, about 50 KB without
+the Firebase scripts.
+
+1. **Join:** "Как се казваш?" (input, 1–16 characters, kept in `localStorage`) → "Влизам".
+   The second time, the name is filled in and one tap joins.
+2. **Lobby:** "Чакаме батъла…" with the two rapper names, left and right.
+3. **Live** (`phase = 'live'`): the screen is split into two large tap zones, left and right,
+   in the side colours, with the rapper names. The rapper who is on now is highlighted. A tap
+   on a zone = one 🔥 for that side. An emoji row (🔥 😂 🤯 👏 💀) picks what the tap sends.
+   Short vibration (`navigator.vibrate(10)`), own tap count shown.
+   - Taps are counted locally at most 6 per second. Every 400 ms the phone writes its totals
+     to `hype` and pushes one `reactions` entry per side with `n` = new taps.
+   - Screen Wake Lock (`navigator.wakeLock`) keeps the screen on during the song.
+4. **Vote** (`phase = 'vote'`): "Оцени рапърите" with 5 big stars for each side, the countdown,
+   and "Изпрати". The phone can change the vote until the time is up. One side is enough.
+5. **Results:** the winner, the two averages, and "Ти даде 🔥 × 34". Then back to the lobby.
+
+Reconnect: Firebase reconnects by itself. The phone always draws itself from `state`, so a
+reload or an unlocked screen lands in the right phase without extra code. `people/{uid}.seenAt`
+updates every 30 s. "Влезли" on the TV counts people seen in the last 2 minutes.
+
+### 16.6 Security rules (`party/database.rules.json`, pasted into the Firebase console)
+
+```json
+{ "rules": { "rooms": { "$room": {
+  ".read": "auth != null",
+  "meta":  { ".write": "!data.exists() && newData.child('hostUid').val() === auth.uid" },
+  "state": { ".write": "root.child('rooms/' + $room + '/meta/hostUid').val() === auth.uid" },
+  "people": { "$uid": { ".write": "auth.uid === $uid",
+    ".validate": "newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 16" } },
+  "hype":  { "$round": { "$uid": { ".write": "auth.uid === $uid" } } },
+  "votes": { "$round": { "$uid": { ".write": "auth.uid === $uid && root.child('rooms/' + $room + '/state/phase').val() === 'vote' && root.child('rooms/' + $room + '/state/round').val() === $round" } } },
+  "reactions": { "$id": { ".write": "(!data.exists() && newData.child('uid').val() === auth.uid) || (!newData.exists() && root.child('rooms/' + $room + '/meta/hostUid').val() === auth.uid)" } }
+} } } }
+```
+
+No read rule on `/rooms` itself, so nobody can list the rooms. P1 adds `.validate` rules
+for the value ranges (stars 1–5, side `L`/`R`, emoji from the list) and checks every rule in
+the Firebase rules simulator.
+
+Privacy: the only personal data is the first name that a guest types. It is visible to
+everyone who has the room code. Old rooms: when the host creates a room, it deletes its own
+rooms older than 24 h (P2).
+
+### 16.7 New files
+
+```
+party.html               ← phone page
+css/party.css            ← phone page styles (shares the tokens of section 6)
+js/party-config.js       ← window.RB_PARTY = {firebase:{...}, base:'https://<vercel site>'}; committed
+                           (a Firebase web config is public by design; the rules protect the data)
+js/party-net.js          ← the only file that talks to Firebase: createRoom, joinRoom, watch, write helpers
+js/party-host.js         ← RB.party: button, overlay, QR, lobby, battle hooks, reactions layer, vote, results
+js/party-phone.js        ← phone page logic
+js/vendor/qrcode.js      ← qrcode-generator (Kazuhiko Arase, MIT), vendored with its licence header
+party/database.rules.json
+tests/party-sim.html     ← ?r=CODE&n=30: 30 fake phones (separate Firebase app instances, each its own anonymous user)
+```
+
+### 16.8 Milestones
+
+- **P0 (the user, about 15 min, with the agent's step-by-step guide):** create a Firebase
+  project on the Spark plan, add a Realtime Database (region `europe-west1`), turn on
+  Anonymous sign-in, add the Vercel domain to the authorized domains, paste the rules (16.6),
+  and paste the web config into the chat. The agent cannot create accounts.
+- **P1 transport spike:** `party-net.js`, `party-config.js`, a bare `party.html`, the rules,
+  `tests/party-sim.html`. Pass: 30 simulated phones join one room; a tap reaches the host in
+  under 300 ms (median); a reload of the host or a phone keeps the room; a second room in
+  another tab does not see the first.
+- **P2 host lobby:** the Парти button, the room, the QR overlay, names live, hide a name,
+  rapper names, turn length, the mini QR, "Нова стая", "Край на партито".
+- **P3 battle in the game:** turns, row sides, header texts, `state.turn`, reactions layer,
+  hype meter, hype calls. Pass: no lost ball frames with 30 simulated phones tapping.
+- **P4 phone page:** join, lobby, live tap zones and emoji, vote, results, wake lock,
+  reconnect. Real test: 3 phones (Android + iPhone), on 4G and Wi-Fi, lock and unlock during
+  a song.
+- **P5 results:** vote phase with the live columns, the reveal, top hypers, the session
+  ranking, "Играй пак" as the next round. Then a full party rehearsal with real phones,
+  before 2026-12-20, so there is time for fixes before 2026-12-31.
+
+Estimate: P1 + P2 one session, P3 one session, P4 + P5 one or two sessions.
+
+### 16.9 Risks
+
+| Risk | Plan |
+|---|---|
+| Weak Wi-Fi or 4G at the venue | Small messages (batched every 400 ms); test on 4G in P4; the game itself never waits for the network |
+| 100 connections limit | Fine for a house party. More guests → a paid Blaze plan or Supabase |
+| Bad words in names on the TV | 16-character limit, the host hides a name with one tap |
+| Tap spam decides the battle | Hype is only a tiebreak; the stars decide; taps capped at 6/s per phone |
+| The QR points to a stale site | The party files must be on `main` (Vercel) before the party; the overlay shows the URL |
+| Phones fall asleep | Wake Lock during the song; reconnect redraws the phase from `state` |
+| Reactions make the ball stutter on the laptop | At most 30 nodes, transform/opacity only, merged bursts; checked in P3 |
+
+### 16.10 Decisions waiting for the user (the defaults above assume the first option)
+
+1. **Backend:** Firebase (needs a free Google Firebase project) / Supabase / no account (PeerJS, risky).
+2. **Battle format:** rappers trade turns of 4 or 8 bars inside one song / each rapper raps
+   a whole song, one after the other (2 songs per battle).
+3. **Rating:** 1–5 stars for each rapper / one tap "who won?" (faster, less detail).
+4. **"Ranking" at the end:** battle result + top hypers + session ranking of rappers / only
+   the battle result.
+5. **Rapper names:** typed on the laptop / the rappers join on their own phones as players.
