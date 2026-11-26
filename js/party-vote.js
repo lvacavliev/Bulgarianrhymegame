@@ -141,7 +141,9 @@
     if (!fin) {
       // stop here: the host retries with the button (no endless loop on a lasting error)
       v.finishing = false;
+      v.failed = true; // the host may also close it now (a lasting error must not trap the screen)
       $('#pvStop').textContent = 'Покажи резултата';
+      $('#pvClose').classList.remove('hidden');
       toast(err && err.code === 'RB004' ? 'Гласуването вече не върви.' : 'Гласуването не приключи. Натисни "Покажи резултата".', 3500);
       return;
     }
@@ -290,10 +292,23 @@
     finish();
   });
   $('#pvNext').addEventListener('click', () => { P.leaveResults(); RB.toMenu(); });
-  $('#pvClose').addEventListener('click', () => { if (V && V.done) closeUI(); });
+  // a vote that could not finish: drop it, the phones go back to the lobby
+  function dropFailed() {
+    V = null;
+    closeUI();
+    if (P.on && P.net) P.queueWrite(() => P.net.patchState({ phase: 'lobby', turn: null }));
+  }
+  $('#pvClose').addEventListener('click', () => {
+    if (!V) return;
+    if (V.done) closeUI(); else if (V.failed && !V.finishing) dropFailed();
+  });
   window.addEventListener('keydown', (e) => {
     if ($('#partyVote').classList.contains('hidden')) return;
-    if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); if (V && V.done) closeUI(); return; }
+    if (e.key === 'Escape') {
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (V && V.done) closeUI(); else if (V && V.failed && !V.finishing) dropFailed();
+      return;
+    }
     if (e.code === 'Space') { e.preventDefault(); e.stopImmediatePropagation(); return; } // no click on a focused button
     if (e.code === 'KeyP' || e.code === 'KeyT') e.stopImmediatePropagation();
   }, true);

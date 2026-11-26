@@ -25,6 +25,9 @@
     if (!SCREENS.includes(name)) return;
     for (const s of SCREENS) document.getElementById(s).classList.toggle('active', s === name);
     current = name;
+    // no focus left on a button of a hidden screen: a held or mashed Enter/Space would press it
+    const a = document.activeElement;
+    if (a && a !== document.body && a.closest && a.closest('.screen') && !a.closest('#' + name) && a.blur) a.blur();
     window.scrollTo(0, 0);
   }
 

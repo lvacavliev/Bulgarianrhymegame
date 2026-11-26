@@ -119,7 +119,7 @@
   }
   $('#playBtn').addEventListener('click', play);
   document.addEventListener('keydown', (e) => {
-    if (window.RB.screen !== 'menu') return;
+    if (window.RB.screen !== 'menu' || e.repeat) return;
     if (e.target.matches && e.target.matches('input, select, textarea')) return;
     if (e.code === 'KeyP') play(); // physical key, works on Bulgarian layouts too
   });

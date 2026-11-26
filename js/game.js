@@ -174,6 +174,9 @@
   }
 
   async function startGame() {
+    // party: the last battle's vote is still being set up or runs: no new game on top of it
+    const P = window.RB.party;
+    if (P && P.startBlocked && P.startBlocked()) { toast('Изчакай гласуването за последния батъл.', 2500); return; }
     if (window.RB.end) window.RB.end.cleanup(); // end-screen popups/confetti
     stopEngine(0.05, 'restart'); // short fade: "Играй пак" must not overlap two beats
     window.RB.beats.stopPreview();
@@ -295,7 +298,9 @@
   }
 
   function resume() {
-    if (!G || !G.paused) return;
+    if (!G) return;
+    if (G.starting) { G.pendingPause = false; return; } // a pause pressed while loading is taken back
+    if (!G.paused) return;
     G.paused = false;
     if (G.engine.isSC) G.engine.resume(); else if (A.ctx) A.ctx.resume();
     if (G.rec) window.RB.rec.resume();
@@ -353,20 +358,21 @@
 
   // ---------- events ----------
   const blurBtn = (e) => { if (e.currentTarget.blur) e.currentTarget.blur(); };
-  $('#pauseBtn').addEventListener('click', (e) => { blurBtn(e); G && G.paused ? resume() : pause(); });
+  $('#pauseBtn').addEventListener('click', (e) => { blurBtn(e); G && (G.paused || G.pendingPause) ? resume() : pause(); });
   $('#resumeBtn').addEventListener('click', (e) => { blurBtn(e); resume(); });
   $('#quitBtn').addEventListener('click', toMenu);
   $('#exitBtn').addEventListener('click', exitGame);
   // end screen: stop the quiet beat when leaving (end.js cleans up its popups in toMenu/startGame)
-  $('#menuBtn').addEventListener('click', toMenu);
-  $('#againBtn').addEventListener('click', () => startGame());
+  // only from the end screen (a click that lands after the screen changed does nothing)
+  $('#menuBtn').addEventListener('click', () => { if (window.RB.screen === 'end') toMenu(); });
+  $('#againBtn').addEventListener('click', () => { if (window.RB.screen === 'end') startGame(); });
 
   document.addEventListener('keydown', (e) => {
     if (window.RB.screen !== 'game' || e.repeat) return;
     if (e.code === 'Space') {
       e.preventDefault();
       if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-      if (G && G.paused) resume(); else pause();
+      if (G && (G.paused || G.pendingPause)) resume(); else pause();
     } else if (e.key === 'Escape') {
       exitGame();
     }

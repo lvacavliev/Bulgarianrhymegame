@@ -31,6 +31,10 @@
   let pendingPart2 = false;       // 1v1: part 1 ended, the end screen offers part 2
   let ops = Promise.resolve();    // network writes in order (start_round before turn patches)
   let warned = 0;
+  // a finished battle's vote is being started (network): no new battle until it is up.
+  // Time-capped, so a hung request cannot lock the host out of playing.
+  let voteSetup = 0, voteSetupAt = 0;
+  const VOTE_SETUP_MAX_MS = 15000;
   const againBtn = $('#againBtn');
   const againText = againBtn.textContent;
 
@@ -64,6 +68,7 @@
       pendingPart2 = false;
       B.part = 2;
       B.started = false;
+      B.armed = false;
       B.lastTurn = null;
     } else {
       pendingPart2 = false;
@@ -87,16 +92,24 @@
     return { mode: B.mode, part: B.part, turnBars: B.turnBars, left: B.left, right: B.right };
   }
 
-  // the beat plays: now the phones may switch to this battle
+  // the beat plays: now the phones may switch to this battle. A new battle waits for
+  // ARM_CELLS beats of the count-in (onCell), so a host who starts and leaves at once
+  // (mashing Play / Esc to get to the right battle) makes no round and sends nothing.
+  const ARM_CELLS = 2;
   function onStarted(G) {
     if (!B || B.started) return;
-    B.started = true;
-    const b = B;
-    if (b.part === 2) {
+    if (B.part === 2) {
+      B.started = true;
+      const b = B;
       b.lastTurn = 'R';
       queue(() => P.net.patchState({ phase: 'live', part: 2, turn: 'R' }), () => { b.lastTurn = null; });
       return;
     }
+    B.armed = true;
+  }
+  function sendStart() {
+    B.started = true;
+    const b = B;
     // new battle: start_round (one retry), then the first turn
     b.roundP = queue(async () => {
       let n;
@@ -132,6 +145,7 @@
   // a hidden tab), so nothing here depends on seeing one exact cell
   function onCell(G, idx) {
     if (!B || idx < 0) return;
+    if (B.armed && !B.started && idx >= ARM_CELLS) sendStart();
     const bar = barOf(idx);
     // the TV glow follows the bar the ball is in
     if (bar >= 1 && bar <= G.bars && bar !== B.edgeBar) { B.edgeBar = bar; edges(sideOf(bar)); }
@@ -183,6 +197,8 @@
     againBtn.textContent = againText;
     edges(null);
     setTimeout(() => { if (!B) showFx(false); }, 2500);
+    const mine = ++voteSetup;
+    voteSetupAt = Date.now();
     queue(async () => {
       if (b.round == null) { await P.net.patchState({ phase: 'lobby', turn: null }); return; } // start_round failed
       const by = {};
@@ -195,7 +211,7 @@
       // only when the vote never started (startVote sets vote.sent after the RPC); a started
       // vote belongs to party-vote.js
       if (!(b.vote && b.vote.sent)) P.net.patchState({ phase: 'lobby', turn: null }).catch(() => {});
-    });
+    }).then(() => { if (mine === voteSetup) voteSetupAt = 0; });
     P.afterBattle();
   }
 
@@ -234,6 +250,14 @@
   P.onRoomGone = () => {
     if (B || pendingPart2) RB.toast('Батълът спря: стаята е затворена.', 3000);
     B = null; pendingPart2 = false; againBtn.textContent = againText; showFx(false);
+    voteSetupAt = 0;
+  };
+
+  // game.js asks before every start: true while the last battle's vote is being set up or runs
+  P.startBlocked = () => {
+    if (!P.on) return false;
+    if (voteSetupAt && Date.now() - voteSetupAt < VOTE_SETUP_MAX_MS) return true;
+    return !!(P.voteState && !P.voteState.done);
   };
 
   // ---------- reactions ----------
