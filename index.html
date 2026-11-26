@@ -62,7 +62,9 @@
       <ul id="beatList" class="beat-list"></ul>
       <input type="file" id="fileInput" accept="audio/*" class="hidden">
 
-      <div id="tempoBox" class="tempo-box hidden">
+      <details id="tempoBox" class="tempo-fold hidden">
+        <summary>Настрой дропа и темпото</summary>
+        <div class="tempo-box">
         <button id="tapBtn" class="btn-ghost full tap-big">Тапни дропа и ритъма</button>
         <p class="full">Пусни бийта с ▶. Тапни (или натисни <b>T</b>) точно когато бийтът влезе изцяло, и продължи да тапваш на всеки удар поне 8 пъти. Първият тап е дропът: оттам почва първият бар на рапа.</p>
         <label>BPM<input id="bpmInput" type="number" min="50" max="220" step="0.25"></label>
@@ -71,7 +73,8 @@
         <button id="dropPlayBtn" class="btn-ghost">▶ Чуй дропа</button>
         <p class="full" id="tempoAuto"></p>
         <p class="full"><button id="tempoAutoBtn" class="link hidden">Върни автоматичните</button> <button id="tempoExportBtn" class="link">Копирай моите настройки</button></p>
-      </div>
+        </div>
+      </details>
 
       <div id="fileBox" class="tempo-box hidden">
         <button id="fileTapBtn" class="btn-ghost full tap-big">Тапни темпото</button>

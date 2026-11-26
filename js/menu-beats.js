@@ -470,7 +470,10 @@
   $('#tapBtn').addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); tap(); } });
   document.addEventListener('keydown', (e) => {
     if (window.RB.screen !== 'menu' || e.repeat || (e.target.matches && e.target.matches('input, select, textarea'))) return;
-    if (e.code === 'KeyT') tap(); // physical T key = tap (works on Bulgarian layouts too)
+    if (e.code === 'KeyT') { // physical T key = tap (works on Bulgarian layouts too)
+      if (!tempoBox.classList.contains('hidden')) tempoBox.open = true; // show the counter while tapping
+      tap();
+    }
   });
 
   // listen from 4 s before the drop, to check it by ear

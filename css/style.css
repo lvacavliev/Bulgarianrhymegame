@@ -141,6 +141,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .tempo-box .full { grid-column: 1 / -1; }
 .tempo-box .tap-big { min-height: 64px; font-size: 16px; touch-action: manipulation; user-select: none; }
 .tempo-box p { margin: 0; font-size: 12px; color: var(--muted); }
+/* the drop/tempo tap tool stays folded until the user asks for it */
+.tempo-fold { margin-top: 10px; }
+.tempo-fold > summary {
+  cursor: pointer; list-style: none; font-size: 13px; font-weight: 700; color: var(--muted);
+  padding: 4px 0; user-select: none;
+}
+.tempo-fold > summary::-webkit-details-marker { display: none; }
+.tempo-fold > summary::before { content: '▸ '; display: inline-block; width: 1em; transition: transform var(--t-in, .2s); }
+.tempo-fold[open] > summary::before { transform: rotate(90deg); }
+.tempo-fold > summary:hover { color: var(--text); }
+.tempo-fold > .tempo-box { margin-top: 6px; }
 .btn-ghost {
   border: 1px solid var(--panel-line); background: var(--panel); border-radius: 12px;
   padding: 9px 12px; font-weight: 800;
