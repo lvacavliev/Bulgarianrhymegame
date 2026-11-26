@@ -618,6 +618,11 @@ window.WORD_LISTS = [
   120 ms. Rhyme cells as in section 4.3. Cell height `--rowH` = 64 px on desktop, 52 px on a
   phone, 80 px in TV mode (fullscreen at a width of 1600 px or more).
 - **Confetti** on the end screen (canvas, about 120 particles, 3 s, gold/rhyme colours).
+- **Motion** (`css/motion.css`, both pages): modals fade the backdrop and rise the dialog;
+  floating items (toast, REC note, mini QR) slide from their edge; `<details>` animate height;
+  inline panels, screens and phone views animate on entry only. Enter 260 ms, exit 170 ms.
+  JS only toggles `.hidden` / `[hidden]` / `[open]`. Reduced motion: fades only. A new popup
+  that uses `.overlay` + `.dialog` gets the motion with no extra code.
 - Must work at 360 px wide: the menu panels stack, the grid width is `min(640px, 94vw)`,
   no horizontal scroll.
 

@@ -103,7 +103,7 @@
     cancelAnimationFrame(raf); raf = 0;
     store.set('rb_tutorialDone', '1');
     closeModal('tutorial');
-    stage.innerHTML = ''; ball = null; cells = [];
+    ball = null; cells = []; // the demo stays drawn while the dialog fades out
     const G = window.RB.game && window.RB.game.state;
     if (pausedGame && G) {
       // opened while the beat was still starting: pause() only queued a pause, drop it

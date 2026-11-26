@@ -54,7 +54,8 @@
     popMode = null;
     if (was === 'end' && pendingStreak) {
       const n = pendingStreak; pendingStreak = null;
-      showPopup('streak', '🔥', n === 1 ? 'Първи ден от поредицата!' : `${n} поредни дни!`);
+      // wait for the first popup to leave (--t-out in motion.css); cleanup() clears popTimer
+      popTimer = setTimeout(() => showPopup('streak', '🔥', n === 1 ? 'Първи ден от поредицата!' : `${n} поредни дни!`), 200);
     }
   }
 

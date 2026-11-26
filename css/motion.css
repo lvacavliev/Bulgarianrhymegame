@@ -1,0 +1,102 @@
+/* Rimoboy motion system, shared by index.html and party.html. Load it after the other CSS.
+
+   One rule per kind of surface:
+     1. Modal (.overlay + .dialog)   backdrop fades, dialog rises and grows; in and out
+     2. Floating (toast, notes, QR)  slides from the edge it sits on; in and out
+     3. Disclosure (<details>)       height and fade; in and out
+     4. Inline panel, screen, view   in only: an exit would stack the old and new layout
+
+   Timing: enter is slower and eases out, exit is faster and eases in.
+   The JS only toggles .hidden / [hidden] / [open]. Exits need transition-behavior:
+   allow-discrete; a browser without it closes at once.
+   Movement uses `translate` and `scale`, so it never overwrites a `transform`. */
+:root {
+  --t-in: 260ms;
+  --t-out: 170ms;
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-in: cubic-bezier(.4, 0, 1, 1);
+  --ease-pop: cubic-bezier(.3, 1.5, .5, 1);
+  --rise: 16px;        /* travel distance */
+  --grow-from: .93;    /* start size of a dialog */
+  --pop-from: .4;      /* start size of an accent (popup emoji) */
+  --stagger: 35ms;     /* delay between menu items */
+  interpolate-size: allow-keywords; /* lets <details> animate to height: auto */
+}
+
+@keyframes m-fade { from { opacity: 0; } }
+@keyframes m-rise { from { opacity: 0; translate: 0 var(--rise); } }
+@keyframes m-pop { from { opacity: 0; scale: var(--pop-from); } }
+
+/* ---------- 1. modals ---------- */
+.overlay {
+  transition: opacity var(--t-in) var(--ease-out);
+  transition: opacity var(--t-in) var(--ease-out), display var(--t-in) allow-discrete;
+}
+.overlay > .dialog {
+  transition: translate var(--t-in) var(--ease-pop), scale var(--t-in) var(--ease-pop);
+}
+@starting-style {
+  .overlay { opacity: 0; }
+  .overlay > .dialog { translate: 0 var(--rise); scale: var(--grow-from); }
+}
+.overlay.hidden {
+  opacity: 0; pointer-events: none; /* a closing modal must not catch taps */
+  transition-duration: var(--t-out); transition-timing-function: var(--ease-in);
+}
+.overlay.hidden > .dialog {
+  translate: 0 calc(var(--rise) / 2); scale: var(--grow-from);
+  transition-duration: var(--t-out); transition-timing-function: var(--ease-in);
+}
+
+/* menu items inside a modal come in one after another */
+.list-items > .list-item { animation: m-rise var(--t-in) var(--ease-out) backwards; }
+.list-items > :nth-child(2) { animation-delay: calc(var(--stagger) * 1); }
+.list-items > :nth-child(3) { animation-delay: calc(var(--stagger) * 2); }
+.list-items > :nth-child(4) { animation-delay: calc(var(--stagger) * 3); }
+.list-items > :nth-child(5) { animation-delay: calc(var(--stagger) * 4); }
+.list-items > :nth-child(6) { animation-delay: calc(var(--stagger) * 5); }
+.list-items > :nth-child(n+7) { animation-delay: calc(var(--stagger) * 6); }
+.overlay:not(.hidden) .popup-emoji { animation: m-pop 420ms var(--ease-pop) 80ms backwards; }
+
+/* ---------- 2. floating ---------- */
+.toast, .rec-note, .party-mini {
+  transition: opacity var(--t-in) var(--ease-out), translate var(--t-in) var(--ease-pop);
+  transition: opacity var(--t-in) var(--ease-out), translate var(--t-in) var(--ease-pop), display var(--t-in) allow-discrete;
+}
+@starting-style {
+  .toast { opacity: 0; translate: 0 calc(var(--rise) * -1.5); }
+  .rec-note { opacity: 0; translate: 0 var(--rise); }
+  .party-mini { opacity: 0; translate: var(--rise) 0; }
+}
+.toast.hidden, .rec-note.hidden, .party-mini.hidden {
+  opacity: 0; pointer-events: none;
+  transition-duration: var(--t-out); transition-timing-function: var(--ease-in);
+}
+.toast.hidden { translate: 0 calc(var(--rise) * -1.5); }
+.rec-note.hidden { translate: 0 var(--rise); }
+.party-mini.hidden { translate: var(--rise) 0; }
+
+/* ---------- 3. disclosure ---------- */
+details::details-content {
+  block-size: 0; opacity: 0; overflow: clip; overflow-clip-margin: 4px; /* room for focus rings */
+  transition: block-size var(--t-out) var(--ease-in), opacity var(--t-out) var(--ease-in),
+    content-visibility var(--t-out) allow-discrete;
+}
+details[open]::details-content {
+  block-size: auto; opacity: 1;
+  transition-duration: var(--t-in); transition-timing-function: var(--ease-out);
+}
+
+/* ---------- 4. enter only ---------- */
+.tempo-box:not(.hidden), .party-strip:not(.hidden), #recCard:not(.hidden), .pv-after:not(.hidden),
+.ph-view:not([hidden]) {
+  animation: m-rise var(--t-in) var(--ease-out) backwards;
+}
+/* opacity only: a moving screen would drag its fixed bars and the pause overlay with it */
+.screen.active { animation: m-fade var(--t-in) var(--ease-out); }
+
+/* ---------- reduced motion: keep the short fades, drop all movement ---------- */
+@media (prefers-reduced-motion: reduce) {
+  :root { --rise: 0px; --grow-from: 1; --pop-from: 1; --stagger: 0ms; }
+  details::details-content, details[open]::details-content { transition: none; }
+}
