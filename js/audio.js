@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  const A = { ctx: null, master: null, comp: null, recDest: null };
+  const A = { ctx: null, master: null, comp: null, recBus: null, recDest: null };
 
   // ---------- per-context shared buffers ----------
   const cache = new WeakMap();
@@ -60,7 +60,18 @@
       A.comp = o.comp;
       if (A.ctx.createMediaStreamDestination) {
         A.recDest = A.ctx.createMediaStreamDestination();
-        A.comp.connect(A.recDest);
+        // beat + mic add up past full scale: trim and limit the mix before the recorder
+        A.recBus = A.ctx.createGain();
+        A.recBus.gain.value = 0.7;
+        const lim = A.ctx.createDynamicsCompressor();
+        lim.threshold.value = -4;
+        lim.knee.value = 0;
+        lim.ratio.value = 20;
+        lim.attack.value = 0.002;
+        lim.release.value = 0.1;
+        A.recBus.connect(lim);
+        lim.connect(A.recDest);
+        A.comp.connect(A.recBus);
       }
       buffers(A.ctx);
     }

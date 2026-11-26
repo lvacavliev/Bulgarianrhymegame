@@ -274,6 +274,14 @@
     });
   }
 
+  // MediaRecorder files carry no length (duration = Infinity): a seek past the end makes
+  // the browser work it out, so the player shows the time and can seek
+  recAudio.addEventListener('loadedmetadata', () => {
+    if (recAudio.duration !== Infinity) return;
+    recAudio.addEventListener('timeupdate', () => { recAudio.currentTime = 0; }, { once: true });
+    recAudio.currentTime = 1e7;
+  });
+
   // while the recording plays, the quiet end-screen beat goes silent
   const beatVol = (v) => { const g = window.RB.game.state; if (g && g === shownG && g.engine) g.engine.setVolume(v, 0.3); };
   recAudio.addEventListener('play', () => beatVol(0));

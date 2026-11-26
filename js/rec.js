@@ -1,6 +1,6 @@
 /* Rimoboy: REC recording (M7). Spec: BUILD.md section 10.
-   The beat reaches RBAudio.recDest through master → compressor → recDest. The mic goes
-   mic → gain 1.3 → recDest, never to the speakers (feedback). A SoundCloud beat plays in a
+   The beat reaches RBAudio.recDest through master → compressor → recBus → limiter. The mic
+   goes mic → gain 1.3 → recBus, never to the speakers (feedback). A SoundCloud beat plays in a
    cross-origin iframe, so with SC the recording is the mic only (section 8A.5).
    RB.rec:
      prepare()  → Promise; asks for the mic (rejects: 'unsupported' | the getUserMedia error)
@@ -48,7 +48,7 @@
     R.micGain = A.ctx.createGain();
     R.micGain.gain.value = 1.3;
     R.micSrc.connect(R.micGain);
-    R.micGain.connect(A.recDest);
+    R.micGain.connect(A.recBus);
   }
 
   function start() {

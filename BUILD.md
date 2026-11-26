@@ -6,10 +6,12 @@
 
 ---
 
-## START HERE (handoff for a new session, updated after M9, 2026-11-26)
+## START HERE (handoff for a new session, updated after M10, 2026-11-26)
 
-**Status:** M0–M9 done (including M3a). **Next: M10, full test pass** (section 13) + fixes.
+**Status:** M0–M10 done (including M3a). The solo game is complete. Open: the user's home
+tests (the checklist at the top of the M10 notes in section 14) and party mode.
 The party is on 2026-12-31.
+
 **Also scoped (2026-11-26), not built:** party mode, section 16 (QR join, phone voting, live
 reactions, ranking). Its milestones P0–P5 wait for the user's decisions in 16.10.
 
@@ -55,24 +57,13 @@ sections 4–9*) → section 13 (the test list).
 | `FileBeat`, `RBFile` | filebeat.js | own-file engine (`isFile`, `position()`, `afterRap`, `rapStart`); `RBFile.envelope(buffer, bins)` for `RBDrop.analyze` |
 | `WORD_LISTS`, `PATTERNS` (+`byId`) | words.js, patterns.js | data |
 | `Chart` | chart.js | `buildChart`, `renderRows(el, chart, {countinRows, revealAll, tap})`, `fitCells(el)`, `FamilyBag`, `shuffle` |
-| `RBAudio` | audio.js | `ensure()`, `ctx`, `master`, `recDest` (compressor → MediaStreamDestination, live ctx only), `latency()`, `makeOutput`, `buffers`, `mtof` |
+| `RBAudio` | audio.js | `ensure()`, `ctx`, `master`, `recBus` (REC mix input: compressor and mic feed it) → limiter → `recDest` (MediaStreamDestination, live ctx only), `latency()`, `makeOutput`, `buffers`, `mtof` |
 | `BEATS`, `SynthBeat` | beats.js | 6 synth beats; engine |
 | `SCW`, `SCBeat` | soundcloud.js | SoundCloud widget singleton; engine |
 
 **Engine interface:** `await engine.start()` (synth: `start(ctx.currentTime + 0.15)`),
 `time()` (latency-corrected, seconds since the first count-in cell), `setVolume(v, ramp)`,
 `stop(fade)`. Pause: synth `RBAudio.ctx.suspend()/resume()`; SC `engine.pause()/resume()`.
-
-**M10 brief (full test pass):**
-1. Go through section 13 item by item in the preview browser (`?offline` for item 16's
-   fallback). Note PASS/FAIL per item in the M10 notes of section 14.
-2. Items the agent cannot do (needs ears, a real mic, a phone, a TV, Safari/iOS): write
-   them as a short checklist for the user (what to do, what to listen for), at the top of
-   the M10 notes. The user tests them at home before the party.
-3. Fix what fails. `node tests/data-check.js .` must still print `OK`.
-4. Optional: a short "Как се играе" help text for SoundCloud limits (section 8A.5) if it is
-   missing.
-5. Tick M10, add a session log entry.
 
 **Beat data for SoundCloud (reworked 2026-11-24, section 8A.7):** BPM, beat drop and end
 of every Bizzle Beats track are **measured offline from the audio** (`tools/analyze_sc.py`,
@@ -89,8 +80,8 @@ once with "▶ Чуй дропа"; the tap tool fixes them.
 cannot listen); listen first to the `check: true` tracks (2wenty, behind-the-mask, blight,
 butterflies, eclipse, florentine, restraint, round-the-bend, the-frogg, warming-up, your-eyes — see the
 comments in sc-tracks.js); the
-synth beats are not judged by ear; basic has 273 words (50 families), two 156 (32),
-the other 4 lists 400+ each; M9 still adds the new theme lists. Hosting: the user has a Vercel deployment linked to the GitHub repo.
+synth beats are not judged by ear. Hosting: the user has a Vercel deployment linked to the
+GitHub repo.
 
 ---
 
@@ -1268,7 +1259,59 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
   - basic (50) and two (31) were not grown: the good one- and two-syllable rhymes are used up; the theme lists add the volume. The lists were not heard in a real game by a Bulgarian speaker: **the user should play one game with each new list.**
   - Verified: `node tests/data-check.js .` OK; buildChart for every pattern × 64 bars on the 4 new lists (no word repeat in a group); list modal shows 11 lists; picking Природа rebuilds the preview; the dictionary for кукувица (before the fix) found "Още рими" across lists.
   - Done early (2026-11-24, on the user's request): the 6 existing lists grew to newyear 400, mic 400, food 400, hard 401 words. Then, on the user's review, `basic` was pruned to simple words of 1–2 syllables (273 words, 50 families) and `two` to words of exactly 2 syllables (156 words, 32 families). Families left with fewer than 4 words were removed. Keep these two rules when adding words: `basic` = common, 1–2 syllables; `two` = exactly 2 syllables, stress on the first. Stress errors fixed: `отвори/затвори/умори/повтори` (stressed on the next-to-last syllable) left the end-stressed family; `пари` (end-stressed) left `two`; `имам` left `food`; `баса` replaced. Words can repeat across lists (only one list is checked for duplicates). Still open: the new theme lists. Section 5.3 shows the old drafts; `js/words.js` is the source of truth.
-- [ ] **M10** Full test pass (section 13) + fixes; optional: publish as a shareable page
+- [x] **M10** Full test pass (section 13) + fixes (session 12)
+  - **Home tests for the user (the agent cannot do these).** Run `start.bat`, use the party
+    laptop, speakers and TV.
+    1. Each synth beat: listen to the preview and to start / stop. No clicks, no crackle, and
+       you like the sound.
+    2. Ball on the beat: play one synth beat, then the same on Bluetooth speakers. The ball
+       lands on the kick / snare. If not, move "Синхрон на топката".
+    3. SoundCloud: press "▶ Чуй дропа" on the `check` tracks (2wenty, behind-the-mask,
+       blight, butterflies, eclipse, florentine, restraint, round-the-bend, the-frogg,
+       warming-up, your-eyes). Fix a wrong one with the tap tool. Then play 3 tracks for 32
+       bars and listen for drift.
+    4. Pull the network (before the app loads, and also during a SoundCloud song). Check what
+       happens and that the synth beats still work.
+    5. REC with the real microphone: record 16 bars, download, play in VLC and Chrome. Voice
+       and beat are both clear, no distortion.
+    6. Own file: load a real MP3, tap the tempo, set "Начало". The ball lands on the
+       downbeats.
+    7. Phone: open the live site. No sideways scroll, all buttons work, a game plays. On an
+       iPhone, also try REC.
+    8. TV: check TV mode from 3 m.
+    9. One game with each new word list (Любов, Градски нощи, Бачкане, Природа).
+  - **Section 13 results** (preview browser, 1024 px and 360 px):
+
+    | # | Item | Result |
+    |---|---|---|
+    | 1 | Tutorial | PASS: first load shows it, "Пропусни" saves the flag, no second show, `?` reopens |
+    | 2 | Synth previews, tempo | PASS for tempo (audio clock vs wall clock within 0.2 %) and offline render (peak < 1, no clipped samples). Clicks: user test 1 |
+    | 3 | AABB, 16 bars | PASS |
+    | 4 | Pattern slots | PASS: all 10 patterns against the 4.2 data (basic and mix), AABB / AAAA / aAaA on the other lists; no mixed colours or families |
+    | 5 | Fill modes | PASS |
+    | 6 | Blank game | PASS |
+    | 7 | Speeds | PASS: cell 0.33 / 0.67 / 1.33 s at 90 BPM, beat unchanged |
+    | 8 | Ball sync by ear | NOT TESTED: user test 2 |
+    | 9 | Pause, resume, exit | PASS: time frozen while paused, lit cell right after resume, Esc → menu, preview starts again with ▶ |
+    | 10 | REC | PASS with a fake mic after 2 fixes (below). Real mic and VLC: user test 5 |
+    | 11 | Own file | PASS with a generated WAV: guess 88 BPM, tap tool 87.96 BPM, full song ends before the file does. Real MP3 and ear check: user test 6 |
+    | 12 | End screen | PASS: 8 bars at 88 BPM → 0:22, dictionary chips navigate, "Играй пак" gives new words |
+    | 13 | Streak | PASS: yesterday, 3 → 4 |
+    | 14 | 360 px | FAIL, fixed → PASS |
+    | 15 | Console errors | PASS: none |
+    | 16 | SoundCloud | PASS for the catalogue (21 tracks), Roses / Warming Up / BLIGHT for 32 bars (engine clock within 6 ms of the wall clock and the widget), pause / resume, `?offline` fallback. By ear and a real network pull: user tests 3, 4 |
+
+  - **Fixes.** (a) At 360 px, long words were cut off in the grid (33 cells in one 64-bar
+    "Трудни думи" game). `Chart.fitCells` now puts a word that does not fit at 8 px on two
+    lines (class `wrap`, soft hyphen at a syllable break; the break is a simple rule, not a
+    dictionary). The recap has narrower labels and gaps at ≤420 px. All 2141 words fit in
+    the game and recap cells at 360 px. `textContent` of a wrapped cell contains U+00AD:
+    read `dataset.word` instead. (b) The recording reached full scale (peak 1.05): beat and
+    mic now go through `RBAudio.recBus` (gain 0.7) and a limiter. Re-test: peak 0.99, no
+    clipped samples. (c) The recording player showed no length (`duration` = Infinity):
+    end.js seeks once past the end, then back to 0.
+  - Skipped (optional): extra SoundCloud help text (the REC note covers the limit the player
+    meets) and a separate shareable page (the Vercel site exists).
 - [ ] **P0–P5** Party mode: QR join, live reactions, audience vote, ranking (section 16.8; scoped 2026-11-26, waits for the decisions in 16.10)
 
 ---
@@ -1344,6 +1387,11 @@ The beat reaches `recDest` through master → comp → recDest. Stop the mic tra
   notes in section 14). **Next: M10** (full test pass).
 - **2026-11-26, session 11:** Scoped party mode (section 16, milestones P0–P5). No code.
   The decisions in 16.10 wait for the user. **Next: M9** (word lists), unchanged.
+- **2026-11-26, session 12 (M10):** M10 done: all of section 13 run in the preview browser
+  (see the M10 notes in section 14). Fixed: long words cut off on phones (chart.js, CSS),
+  recording at full scale (audio.js, rec.js), recording player without a length (end.js).
+  `tests/data-check.js` OK. A party mode session was editing the same folder at the same
+  time. **Next:** the user's home tests; party mode.
 
 ---
 

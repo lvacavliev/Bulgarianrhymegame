@@ -106,18 +106,54 @@
     fitCells(container);
   }
 
-  // Shrinks the font of every word cell until the word fits its cell (min 8px).
+  const SHY = '­'; // soft hyphen: invisible unless the line breaks there
+  const isVowel = (ch) => 'аъоуеиюя'.includes((ch || '').toLowerCase());
+
+  // The word with one soft hyphen at the syllable break nearest to its middle.
+  function splitWord(word) {
+    let best = 0;
+    for (let i = 2; i <= word.length - 2; i++) {
+      const a = word[i - 1], b = word[i];
+      // the second line starts with consonant + vowel ("кален-дар", not "кале-ндар")
+      if (isVowel(b) || b === 'ь' || !isVowel(word[i + 1])) continue;
+      if (a === 'д' && (b === 'ж' || b === 'з')) continue;
+      if (![...word.slice(0, i)].some(isVowel)) continue;
+      if (!best || Math.abs(i - word.length / 2) < Math.abs(best - word.length / 2)) best = i;
+    }
+    return best ? word.slice(0, best) + SHY + word.slice(best) : word;
+  }
+
+  // shrinks the cell font until the text fits, or until `min` px
+  function shrink(cell, min) {
+    cell.style.fontSize = '';
+    let fs = parseFloat(getComputedStyle(cell).fontSize);
+    const over = () => cell.scrollWidth > cell.clientWidth || cell.scrollHeight > cell.clientHeight;
+    while (over() && fs > min) {
+      fs = Math.max(min, fs - 0.5);
+      cell.style.fontSize = fs + 'px';
+    }
+    return !over();
+  }
+
+  // Fits every word cell: first it shrinks the font (down to 8px). A word that is still
+  // too wide (a long word on a phone) goes on two lines.
   // Runs now and again after layout (fonts may still be loading).
   function fitCells(container) {
     const run = () => {
       for (const cell of container.querySelectorAll('.cell.rhyme')) {
+        if (cell.classList.contains('wrap')) {
+          cell.classList.remove('wrap');
+          cell.textContent = cell.textContent.replace(SHY, '');
+        }
         cell.style.fontSize = '';
         if (!cell.clientWidth) continue; // hidden: fit later
-        let fs = parseFloat(getComputedStyle(cell).fontSize);
-        while (cell.scrollWidth > cell.clientWidth && fs > 8) {
-          fs -= 1;
-          cell.style.fontSize = fs + 'px';
+        if (shrink(cell, 8)) continue;
+        const split = splitWord(cell.textContent);
+        if (split !== cell.textContent) {
+          cell.textContent = split;
+          cell.classList.add('wrap');
         }
+        shrink(cell, 7);
       }
     };
     run();

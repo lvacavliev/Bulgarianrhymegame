@@ -252,6 +252,7 @@ details#adv h3 { font-size: 11px; letter-spacing: 1.4px; color: var(--muted); ma
 .cell.long { font-size: clamp(11px, calc(var(--rowH) * .27), 24px); }
 .cell.xlong { font-size: clamp(10px, calc(var(--rowH) * .22), 20px); }
 .cell.rhyme { box-shadow: inset 0 -4px 0 rgba(0,0,0,.25); }
+.cell.rhyme.wrap { white-space: normal; line-height: 1.15; } /* two lines, set by fitCells */
 .cell.c0 { background: var(--r1); } .cell.c1 { background: var(--r2); } .cell.c2 { background: var(--r3); }
 .cell.c3 { background: var(--r4); } .cell.c4 { background: var(--r5); } .cell.c5 { background: var(--r6); }
 .cell.free { background: var(--word-cell); }
@@ -397,6 +398,7 @@ details#adv h3 { font-size: 11px; letter-spacing: 1.4px; color: var(--muted); ma
   .tempo-box { grid-template-columns: 1fr 1fr; }
   :root { --rowH: 46px; }
   #gHead1 { font-size: 19px; }
+  .recap { --label: 12px; --gap: 4px; } /* wider cells for the long words */
 }
 body.tv { --rowH: 84px; --gap: 10px; }
 body.tv .viewport { width: min(1100px, 94vw); }
